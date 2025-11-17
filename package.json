@@ -1,0 +1,23 @@
+{
+  "name": "multi-user-ai-chat-vercel",
+  "version": "1.0.0",
+  "description": "A multi-user chat room with a persistent AI character, deployed on Vercel.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "14.2.5", 
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "openai": "^4.52.7", 
+    "mongodb": "^6.8.0" 
+  },
+  "devDependencies": {
+    "eslint": "8.57.0",
+    "eslint-config-next": "14.2.5"
+  }
+}

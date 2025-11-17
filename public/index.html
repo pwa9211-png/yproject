@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>双人 AI 聊天室</title>
+    <style>
+        /* 简单美化，请自行复制到一个 CSS 文件或 style 标签中 */
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        #chat-window { height: 500px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+        .message-ai { background-color: #e6f7ff; padding: 5px; border-radius: 5px; margin-bottom: 5px; }
+        .message-user { background-color: #f0f0f0; text-align: right; padding: 5px; border-radius: 5px; margin-bottom: 5px; }
+        .message-user span { font-weight: bold; margin-right: 5px; }
+    </style>
+</head>
+<body>
+
+    <h2>双人 AI 聊天室</h2>
+    <div id="join-form">
+        <input type="text" id="nickname" placeholder="输入您的称呼 (例如: 小王)" value="用户A">
+        <input type="text" id="room-id" placeholder="输入聊天室号码 (例如: 123456)" value="123456">
+        <button onclick="joinChat()">加入/创建聊天室</button>
+    </div>
+
+    <div id="chat-area" style="display: none;">
+        <p>当前房间：<strong id="current-room-id"></strong> | AI 角色：**环球智囊**</p>
+        <div id="chat-window">
+            </div>
+        <input type="text" id="user-input" placeholder="输入您的消息..." onkeypress="if(event.keyCode == 13) sendMessage()">
+        <button onclick="sendMessage()">发送</button>
+    </div>
+
+    <script>
+        let currentRoomId = null;
+        let currentNickname = null;
+        let messageHistory = []; // 用于本地存储和发送给 AI 的历史记录
+        const AI_NAME = '环球智囊';
+
+        const SYSTEM_PROMPT = "你是一位资深且专业的旅行规划师。你的任务是根据两位用户的对话，为他们提供有创意、详细、切合实际的旅行建议和行程规划。你的回复应该专业、友善、富有条理，并能针对用户提出的不同需求（如预算、偏好、时间）提供定制化的解决方案。每次回复都要考虑到两位用户的发言上下文。";
+
+        function joinChat() {
+            currentNickname = document.getElementById('nickname').value;
+            currentRoomId = document.getElementById('room-id').value;
+
+            if (!currentNickname || !currentRoomId) {
+                alert('请填写称呼和聊天室号码！');
+                return;
+            }
+
+            document.getElementById('join-form').style.display = 'none';
+            document.getElementById('chat-area').style.display = 'block';
+            document.getElementById('current-room-id').textContent = currentRoomId;
+
+            // 首次加入，在聊天窗口显示欢迎信息
+            appendMessage(AI_NAME, `欢迎 ${currentNickname} 加入房间 ${currentRoomId}。我是环球智囊，很高兴能为二位规划旅行！请开始吧。`, 'ai');
+
+            // 启动定时拉取消息（简化版实时通信）
+            startPolling();
+        }
+
+        function appendMessage(sender, content, type) {
+            const chatWindow = document.getElementById('chat-window');
+            const msgDiv = document.createElement('div');
+            
+            if (type === 'ai') {
+                msgDiv.className = 'message-ai';
+                msgDiv.innerHTML = `<strong>${sender} (AI):</strong> ${content}`;
+            } else {
+                msgDiv.className = 'message-user';
+                msgDiv.innerHTML = `<span>${sender}:</span> ${content}`;
+            }
+            
+            chatWindow.appendChild(msgDiv);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+
+            // 维护历史记录 (仅存储用户和 AI 消息，用于发送给 AI)
+            if (type !== 'system') {
+                const role = type === 'ai' ? 'assistant' : 'user';
+                const messageContent = type === 'ai' ? content : `${sender} 说: ${content}`;
+                messageHistory.push({ role: role, content: messageContent });
+            }
+        }
+
+        async function sendMessage() {
+            const userInput = document.getElementById('user-input');
+            const message = userInput.value.trim();
+            userInput.value = '';
+
+            if (message === '') return;
+
+            // 1. 显示用户自己的消息
+            appendMessage(currentNickname, message, 'user');
+            
+            // 2. 将消息发送给 API，获取 AI 回复
+            try {
+                // 使用 Fetch API 调用 Vercel 上的 Next.js API 路由
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        room_id: currentRoomId,
+                        nickname: currentNickname,
+                        message: message,
+                        history: messageHistory, // 将当前历史记录发送过去
+                        system_prompt: SYSTEM_PROMPT 
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('API 请求失败');
+                }
+
+                const data = await response.json();
+                
+                // 3. 显示 AI 的回复
+                const aiResponse = data.ai_response;
+                appendMessage(AI_NAME, aiResponse, 'ai');
+
+                // 注意：在没有 MongoDB 或 Redis 的情况下，**实时性**是依赖于**另一个用户的操作**
+                // 真正的多人聊天需要 WebSocket。由于我们用的是 Vercel Serverless，
+                // 我们的**实时性**将通过轮询或一个外部存储来实现。
+                
+                // *** 重要的简化 ***: 在这个简化的版本中，当 A 发送消息并获取 AI 回复后，
+                // B 用户的界面需要自己去**拉取**最新的消息（AI 和 A 的消息）。
+
+            } catch (error) {
+                console.error('发送消息或获取 AI 回复出错:', error);
+                appendMessage('系统', '无法连接或获取 AI 回复，请检查后端配置。', 'system');
+            }
+        }
+        
+        // --- 实时通信简化：通过轮询获取最新状态 ---
+        // 这种方式在 Vercel Serverless 环境下不理想，因为没有持久状态。
+        // **最推荐**的方法是使用 MongoDB 或 Redis 来存储每个房间的**消息列表**。
+
+        // **因为您配置了 MongoDB，所以我们的后端 API 将会负责写入和读取消息列表。**
+        // 前端只需要定时去查询这个列表。
+        
+        function startPolling() {
+            // 每 2 秒检查一次新消息
+            setInterval(fetchNewMessages, 2000); 
+        }
+
+        let lastMessageCount = 0; // 用于追踪消息数量
+
+        async function fetchNewMessages() {
+            if (!currentRoomId || !currentNickname) return;
+            
+            try {
+                // 调用一个专门用于获取消息历史的 API
+                const response = await fetch(`/api/history?room_id=${currentRoomId}`);
+                const data = await response.json();
+                const allMessages = data.messages || []; // 假设 API 返回一个 messages 数组
+                
+                if (allMessages.length > lastMessageCount) {
+                    // 只显示新的消息
+                    for (let i = lastMessageCount; i < allMessages.length; i++) {
+                        const msg = allMessages[i];
+                        appendMessage(msg.sender, msg.content, msg.type);
+                    }
+                    lastMessageCount = allMessages.length;
+                }
+            } catch (error) {
+                console.error('获取新消息出错:', error);
+            }
+        }
+
+        // 注意：上述轮询逻辑是**简化**的，需要后端 API (`/api/history`) 和 MongoDB 配合。
+        // 真正的 AI 聊天功能在 sendMessage() 中，是 A 发送，AI 回复，然后 B 轮询时能看到。
+    </script>
+</body>
+</html>
