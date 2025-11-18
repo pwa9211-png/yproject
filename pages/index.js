@@ -1,8 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 
-// --- 样式定义 ---
+// --- 常量 ---
+const aiRole = "环球智囊";
+const HISTORY_POLLING_INTERVAL = 3000; // 历史消息轮询间隔 (3秒)
+const HEARTBEAT_INTERVAL = 10000;      // 心跳发送间隔 (10秒)
+const OFFLINE_THRESHOLD = 30000;       // 离线判定阈值 (30秒)
+
+// --- 样式定义 (保持不变) ---
 const styles = {
+    // ... (所有样式保持不变，参考上一个完整版本) ...
     container: { maxWidth: '800px', margin: '0 auto', padding: '20px', fontFamily: 'Arial, sans-serif' },
     header: { textAlign: 'center', paddingBottom: '10px', marginBottom: '20px' },
     headerActions: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' },
@@ -23,7 +30,7 @@ const styles = {
         position: 'absolute',
         bottom: '40px', 
         left: '0',
-        width: 'calc(100% - 75px)', // 减去发送按钮的宽度
+        width: 'calc(100% - 75px)', 
         maxHeight: '200px',
         overflowY: 'auto',
         backgroundColor: '#fff',
@@ -41,12 +48,8 @@ const styles = {
         }
     }
 };
-// --- 组件定义 ---
 
-const aiRole = "环球智囊";
-const POLLING_INTERVAL = 3000;
-
-// 主应用组件，包含登录逻辑
+// 主应用组件 (登录逻辑保持不变)
 export default function IndexPage() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [username, setUsername] = useState('');
@@ -92,6 +95,7 @@ export default function IndexPage() {
     return <ChatRoom username={username} room={room} aiRole={aiRole} />;
 }
 
+
 // ChatRoom 组件
 function ChatRoom({ username, room, aiRole }) {
     const [messages, setMessages] = useState([]);
@@ -102,34 +106,51 @@ function ChatRoom({ username, room, aiRole }) {
     const chatWindowRef = useRef(null);
     const lastMessageCountRef = useRef(0);
     const inputRef = useRef(null);
+    
+    // **新增：心跳发送函数**
+    const sendHeartbeat = async () => {
+        try {
+            await fetch('/api/heartbeat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ room, username }),
+            });
+        } catch (error) {
+            console.error('Heartbeat failed:', error);
+        }
+    };
 
-    // **轮询函数**：加载历史消息并更新成员列表
+    // **轮询函数**：加载历史消息 *并* 更新在线成员列表
     const loadHistory = async (isManual = false) => {
         try {
-            const res = await fetch(`/api/history?room=${room}`);
-            if (!res.ok) {
-                const errorData = await res.json().catch(() => ({ message: '网络连接错误或服务器失败。' }));
-                throw new Error(errorData.message || '网络连接错误或服务器失败。');
-            }
-            const data = await res.json();
+            // 1. 获取聊天历史
+            const historyRes = await fetch(`/api/history?room=${room}`);
+            if (!historyRes.ok) throw new Error('无法获取历史记录。');
+            const historyData = await historyRes.json();
             
-            // 提取所有独特的发送者 (包括自己，但不包括 AI)
-            const senders = new Set();
-            data.messages.forEach(msg => {
-                if (msg.role === 'user' && msg.sender) {
-                    senders.add(msg.sender);
-                }
-            });
-            const membersList = Array.from(senders);
-            // 将 AI 加入到可选列表中
-            if (!membersList.includes(aiRole)) {
-                 membersList.push(aiRole); 
-            }
-            setOnlineMembers(membersList);
+            // 2. 获取实时在线状态 (新增 API)
+            const statusRes = await fetch(`/api/online-status?room=${room}`);
+            if (!statusRes.ok) throw new Error('无法获取在线状态。');
+            const statusData = await statusRes.json();
             
+            const now = Date.now();
+            
+            // 根据心跳过滤出在线用户
+            const activeUsers = statusData.filter(user => 
+                (now - new Date(user.lastActive).getTime()) < OFFLINE_THRESHOLD
+            ).map(user => user.username);
+            
+            // 将 AI 角色加入列表 (AI 永远在线)
+            if (!activeUsers.includes(aiRole)) {
+                 activeUsers.push(aiRole); 
+            }
+            
+            setOnlineMembers(activeUsers);
+            
+            // 3. 更新聊天消息
             const newMessages = [
                 { role: 'system', message: `欢迎 ${username} 加入房间 ${room}。AI 角色: **${aiRole}**。` },
-                ...data.messages,
+                ...historyData.messages,
             ];
 
             if (newMessages.length !== lastMessageCountRef.current || isManual) {
@@ -138,38 +159,52 @@ function ChatRoom({ username, room, aiRole }) {
             }
 
         } catch (error) {
-            console.error('Error loading history:', error);
+            console.error('Error loading data:', error);
+            // ... (错误处理逻辑保持不变) ...
             if (lastMessageCountRef.current === 0) {
                  setMessages([
-                    { role: 'system', message: `无法加载聊天历史，请检查后端配置和网络连接。错误信息: ${error.message}` },
+                    { role: 'system', message: `无法加载聊天历史/在线状态，请检查后端配置和网络连接。错误信息: ${error.message}` },
                     { role: 'system', message: `欢迎 ${username} 加入房间 ${room}。我是 ${aiRole}，很高兴为您规划旅行！` },
                 ]);
             }
         }
     };
 
-    // 首次加载和轮询逻辑
+    // **心跳和轮询启动**
     useEffect(() => {
+        // 立即发送心跳
+        sendHeartbeat(); 
+        
+        // 启动心跳定时器
+        const heartbeatIntervalId = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
+        
+        // 启动历史轮询定时器
         loadHistory(); 
-        const intervalId = setInterval(() => {
+        const historyIntervalId = setInterval(() => {
             loadHistory();
-        }, POLLING_INTERVAL);
-        return () => clearInterval(intervalId);
+        }, HISTORY_POLLING_INTERVAL);
+
+        // 组件卸载时清除定时器
+        return () => {
+            clearInterval(heartbeatIntervalId);
+            clearInterval(historyIntervalId);
+        }
     }, [room, username, aiRole]); 
     
-    // 自动滚动到底部
+    // 自动滚动到底部 (保持不变)
     useEffect(() => {
         if (chatWindowRef.current) {
             chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
         }
     }, [messages]);
     
+    // ... (输入框、@ 选单、消息发送等逻辑保持不变) ...
+    
     // 处理输入框变化
     const handleInputChange = (e) => {
         const value = e.target.value;
         setInputMessage(value);
 
-        // 检查输入框中最后一个字符是否是 @
         const lastChar = value.slice(-1);
         if (lastChar === '@') {
             setShowSuggestions(true);
@@ -197,6 +232,9 @@ function ChatRoom({ username, room, aiRole }) {
         setMessages(prev => [...prev, userMsg]); 
         setInputMessage('');
         setIsLoading(true);
+        
+        // 发送消息前，也发送一次心跳，确保活跃状态
+        await sendHeartbeat();
 
         try {
             const res = await fetch('/api/chat', {
@@ -234,9 +272,9 @@ function ChatRoom({ username, room, aiRole }) {
         }
     };
     
-    // **导出对话记录处理函数 (HTML格式)**
+    // 导出对话记录处理函数 (HTML格式) - 保持不变
     const handleExportChat = () => {
-        // 1. 构建聊天内容的主体 HTML
+        // ... (HTML 导出逻辑保持不变) ...
         const chatContentHtml = messages.map(msg => {
             if (msg.role === 'system') {
                 return `<p style="text-align: center; color: #dc3545; font-style: italic; font-family: Arial, sans-serif;">--- 系统提示: ${msg.message} ---</p>`;
@@ -250,7 +288,6 @@ function ChatRoom({ username, room, aiRole }) {
             
             const isUser = msg.sender === username;
             
-            // 使用内联样式模拟聊天气泡，保持与页面一致的左右对齐和颜色
             const messageStyle = `
                 padding: 8px; 
                 margin: 10px 0; 
@@ -273,7 +310,6 @@ function ChatRoom({ username, room, aiRole }) {
             `;
         }).join('\n');
 
-        // 2. 构造完整的 HTML 页面
         const fullHtml = `
             <!DOCTYPE html>
             <html lang="zh-TW">
@@ -298,7 +334,6 @@ function ChatRoom({ username, room, aiRole }) {
             </html>
         `;
 
-        // 3. 创建 Blob 对象并触发下载
         const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
         
         const url = URL.createObjectURL(blob);
@@ -313,7 +348,7 @@ function ChatRoom({ username, room, aiRole }) {
         alert('对话已成功导出为 HTML 文件，用浏览器打开即可查看。');
     };
     
-    // **清空对话记录处理函数**
+    // 清空对话记录处理函数 - 保持不变
     const handleClearChat = async () => {
         if (!window.confirm(`确定要清空房间 ${room} 的所有 ${messages.length - 1} 条对话记录吗？此操作不可撤销！`)) {
             return;
@@ -366,12 +401,15 @@ function ChatRoom({ username, room, aiRole }) {
 
 
                 <div style={styles.userList}>
-                    <h4>在线成员 (基于历史记录)</h4>
-                    {onlineMembers.filter(member => member !== aiRole).map(member => (
-                         <p key={member} style={{ ...styles.userItem, color: member === username ? '#007bff' : '#000000' }}>
-                            {member} {member === username ? '(你)' : ''}
+                    <h4>在线成员 (心跳检测)</h4>
+                    {onlineMembers.filter(member => member !== aiRole && member !== username).map(member => (
+                         <p key={member} style={{ ...styles.userItem, color: '#000000' }}>
+                            {member}
                          </p>
                     ))}
+                    {/* 当前用户永远显示为在线 */}
+                    <p style={{ ...styles.userItem, color: '#007bff' }}>{username} (你)</p>
+                    {/* AI 始终显示 */}
                     <p style={{ ...styles.userItem, color: '#28a745' }}>{aiRole} (AI)</p>
                 </div>
 
