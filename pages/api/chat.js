@@ -1,83 +1,111 @@
-// /pages/api/chat.js (Next.js Pages Router 结构)
-
-import { OpenAI } from 'openai';
 import { MongoClient } from 'mongodb';
+import OpenAI from 'openai';
 
-// 从环境变量中读取配置
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const MONGODB_URI = process.env.MONGODB_URI;
-const DB_NAME = 'chat_database';
-const COLLECTION_NAME = 'room_messages';
+// MongoDB 配置
+const uri = process.env.MONGODB_URI;
+const client = new MongoClient(uri);
 
-// 假设 OpenAI 客户端和 MongoDB 连接
-const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
-let cachedDb = null;
+// Kimi Chat 配置
+const kimiApiKey = process.env.MOONSHOT_API_KEY;
+// 使用 MOONSHOT_BASE_URL 变量，如果没有设置，则使用 Kimi 的默认 API 地址
+const kimiBaseUrl = process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1'; 
 
-// MongoDB 连接函数
-async function connectToDatabase() {
-    if (cachedDb) return cachedDb;
-
-    const client = await MongoClient.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
-    const db = client.db(DB_NAME);
-    cachedDb = db;
-    return db;
-}
-
-// 写入消息到 MongoDB 的辅助函数
-async function insertMessage(db, roomId, sender, content, type) {
-    const messagesCollection = db.collection(COLLECTION_NAME);
-    await messagesCollection.insertOne({
-        roomId: roomId,
-        sender: sender,
-        content: content,
-        type: type, // 'user', 'ai'
-        timestamp: new Date()
-    });
-}
+// 实例化 OpenAI 客户端，但配置为连接 Kimi 的 API
+const kimi = new OpenAI({
+  apiKey: kimiApiKey,
+  baseURL: kimiBaseUrl,
+});
 
 export default async function handler(req, res) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ message: '只允许 POST 请求' });
-    }
+  // 仅接受 POST 请求
+  if (req.method !== 'POST') {
+    return res.status(405).json({ message: 'Method Not Allowed' });
+  }
 
-    const { room_id, nickname, message, history, system_prompt } = req.body;
+  const { room, sender, message, aiRole } = req.body;
 
-    if (!room_id || !nickname || !message || !system_prompt) {
-        return res.status(400).json({ message: '缺少必要的参数' });
-    }
+  if (!room || !sender || !message || !aiRole) {
+    return res.status(400).json({ message: 'Missing required fields: room, sender, message, or aiRole.' });
+  }
+
+  try {
+    await client.connect();
+    const db = client.db('chatDB');
+    const messagesCollection = db.collection('messages');
+
+    // 1. 保存用户发送的消息到数据库
+    const userMessage = {
+      room,
+      sender,
+      message,
+      timestamp: new Date(),
+      role: 'user',
+    };
+    await messagesCollection.insertOne(userMessage);
+
+    // 2. 获取历史消息（最多 N 条）
+    const historyMessages = await messagesCollection.find({ room })
+      .sort({ timestamp: -1 }) // 按时间倒序
+      .limit(10) // 限制获取最近10条消息
+      .toArray();
+
+    // 3. 构建 Kimi Chat API 所需的消息格式
+    // 角色定义：系统角色 + 历史消息
+    const systemPrompt = `你是一个专业的旅行规划AI，你的名字是“${aiRole}”。你的任务是根据用户的需求，为他们提供旅行建议、行程规划或回答相关问题。`;
+
+    // 格式化历史消息，确保角色正确
+    const messagesForApi = historyMessages.reverse().map(msg => ({ // 倒序回来，保证时间顺序
+      role: msg.role === 'user' ? 'user' : 'assistant',
+      content: msg.message,
+    }));
+
+    // 插入系统提示和当前用户消息
+    messagesForApi.unshift({
+      role: 'system',
+      content: systemPrompt,
+    });
+    messagesForApi.push({
+        role: 'user',
+        content: message,
+    });
     
-    try {
-        const db = await connectToDatabase();
-        
-        // 1. **将当前用户消息写入数据库** (A 发言)
-        await insertMessage(db, room_id, nickname, message, 'user');
+    // 4. 调用 Kimi Chat API 获取回复
+    const completion = await kimi.chat.completions.create({
+      // 使用 Kimi 推荐的模型，您可以根据需求更换
+      model: "moonshot-v1-8k", 
+      messages: messagesForApi,
+      temperature: 0.7,
+      max_tokens: 1024,
+    });
 
-        // 2. **构造发送给 OpenAI 的消息列表**
-        // 确保历史记录中包含系统指令
-        const messages = [
-            { role: 'system', content: system_prompt },
-            ...history.map(msg => ({ role: msg.role, content: msg.content })) // 使用前端传来的历史
-        ];
-        
-        // 3. **调用 OpenAI API 获取回复**
-        const completion = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo", // 使用一个经济高效的模型
-            messages: messages,
-        });
+    const aiResponseMessage = completion.choices[0].message.content;
 
-        const aiResponse = completion.choices[0].message.content;
+    // 5. 保存 AI 的回复到数据库
+    const aiMessage = {
+      room,
+      sender: aiRole,
+      message: aiResponseMessage,
+      timestamp: new Date(),
+      role: 'assistant',
+    };
+    await messagesCollection.insertOne(aiMessage);
 
-        // 4. **将 AI 的回复写入数据库**
-        await insertMessage(db, room_id, '环球智囊', aiResponse, 'ai');
-        
-        // 5. **返回 AI 回复给发送者 (用户 A)**
-        res.status(200).json({ ai_response: aiResponse, message: '消息已发送并存储' });
+    // 6. 返回成功响应
+    res.status(200).json({ 
+      success: true, 
+      aiResponse: aiResponseMessage 
+    });
 
-    } catch (error) {
-        console.error('API 处理错误:', error);
-        res.status(500).json({ 
-            message: '服务器处理错误', 
-            error: error.message 
-        });
+  } catch (error) {
+    console.error('Chat API Error:', error);
+
+    // 特别处理 API Key 或配额错误，以便在日志中更清晰
+    if (error.status === 401 || error.status === 429) {
+         res.status(500).json({ message: 'API Error: 请检查 Kimi API Key 是否有效或配额是否用尽。', details: error.message });
+    } else {
+         res.status(500).json({ message: '服务器处理错误，请检查日志。', details: error.message });
     }
+  } finally {
+    await client.close();
+  }
 }
