@@ -14,7 +14,7 @@ const styles = {
     input: { flexGrow: 1, padding: '10px', border: '1px solid #ccc', borderRadius: '4px 0 0 4px' },
     button: { padding: '10px 15px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '0 4px 4px 0', cursor: 'pointer' },
     userList: { position: 'fixed', top: '20px', right: '20px', width: '200px', border: '1px solid #ccc', padding: '10px', borderRadius: '8px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' },
-    userItem: { marginBottom: '5px', fontWeight: 'bold', color: '#007bff' },
+    userItem: { marginBottom: '5px', fontWeight: 'bold' },
     loginForm: { display: 'flex', flexDirection: 'column', gap: '15px', padding: '40px', border: '1px solid #eee', borderRadius: '10px', maxWidth: '400px', margin: '100px auto' }
 };
 // --- 组件定义 ---
@@ -74,10 +74,11 @@ function ChatRoom({ username, room, aiRole }) {
     const [messages, setMessages] = useState([]);
     const [inputMessage, setInputMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [onlineMembers, setOnlineMembers] = useState([]); // 新增：在线成员列表
     const chatWindowRef = useRef(null);
-    const lastMessageCountRef = useRef(0); // 用于判断是否需要滚动
+    const lastMessageCountRef = useRef(0);
 
-    // **轮询函数**：加载历史消息
+    // **轮询函数**：加载历史消息并更新成员列表
     const loadHistory = async (isManual = false) => {
         try {
             const res = await fetch(`/api/history?room=${room}`);
@@ -87,6 +88,17 @@ function ChatRoom({ username, room, aiRole }) {
             }
             const data = await res.json();
             
+            // 提取所有独特的发送者 (不包括 AI)
+            const senders = new Set();
+            data.messages.forEach(msg => {
+                if (msg.role === 'user' && msg.sender !== username) {
+                    senders.add(msg.sender);
+                }
+            });
+            // 确保当前用户在列表中
+            senders.add(username);
+            setOnlineMembers(Array.from(senders));
+            
             // 确保 system message 始终在最前面
             const newMessages = [
                 { role: 'system', message: `欢迎 ${username} 加入房间 ${room}。AI 角色: **${aiRole}**。` },
@@ -94,17 +106,13 @@ function ChatRoom({ username, room, aiRole }) {
             ];
 
             // 只有当消息数量发生变化时才更新状态
-            if (newMessages.length !== lastMessageCountRef.current) {
+            if (newMessages.length !== lastMessageCountRef.current || isManual) {
                  setMessages(newMessages);
                  lastMessageCountRef.current = newMessages.length;
-            } else if (isManual) {
-                // 如果是手动发送消息后，即使数量没变也要刷新
-                setMessages(newMessages);
             }
 
         } catch (error) {
             console.error('Error loading history:', error);
-            // 只有首次加载失败才显示红色的系统提示
             if (lastMessageCountRef.current === 0) {
                  setMessages([
                     { role: 'system', message: `无法加载聊天历史，请检查后端配置和网络连接。错误信息: ${error.message}` },
@@ -116,13 +124,13 @@ function ChatRoom({ username, room, aiRole }) {
 
     // 首次加载和轮询逻辑
     useEffect(() => {
-        loadHistory(); // 首次立即加载
+        loadHistory(); 
         
         const intervalId = setInterval(() => {
             loadHistory();
-        }, POLLING_INTERVAL); // 每隔 3 秒加载一次
+        }, POLLING_INTERVAL);
 
-        return () => clearInterval(intervalId); // 清除定时器
+        return () => clearInterval(intervalId);
     }, [room, username, aiRole]); 
     
     // 自动滚动到底部
@@ -193,8 +201,13 @@ function ChatRoom({ username, room, aiRole }) {
                 </header>
 
                 <div style={styles.userList}>
-                    <h4>在线成员</h4>
-                    <p style={styles.userItem}>{username} (你)</p>
+                    <h4>在线成员 (基于历史记录)</h4>
+                    {onlineMembers.map(member => (
+                         <p key={member} style={{ ...styles.userItem, color: member === username ? '#007bff' : '#000000' }}>
+                            {member} {member === username ? '(你)' : ''}
+                         </p>
+                    ))}
+                    {/* AI 始终显示 */}
                     <p style={{ ...styles.userItem, color: '#28a745' }}>{aiRole} (AI)</p>
                 </div>
 
@@ -223,7 +236,7 @@ function ChatRoom({ username, room, aiRole }) {
 
                 <div style={styles.inputArea}>
                     <input type="text" value={inputMessage} onChange={(e) => setInputMessage(e.target.value)}
-                        onKeyPress={handleKeyPress} placeholder="输入您的信息..." style={styles.input} disabled={isLoading}
+                        onKeyPress={handleKeyPress} placeholder="输入您的信息... (要让AI回话，请在消息中包含 @环球智囊)" style={styles.input} disabled={isLoading}
                     />
                     <button onClick={handleSend} style={styles.button} disabled={isLoading}>
                         {isLoading ? '发送中' : '发送'}
