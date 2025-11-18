@@ -1,8 +1,7 @@
 {
-  "name": "multi-user-ai-chat-vercel",
+  "name": "yproject",
   "version": "1.0.0",
-  "description": "A multi-user chat room with a persistent AI character, deployed on Vercel.",
-  "main": "index.js",
+  "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,11 +9,11 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "14.2.5", 
+    "next": "14.2.5",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "openai": "^4.52.7", 
-    "mongodb": "^6.8.0" 
+    "mongodb": "^6.8.0",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "eslint": "8.57.0",
