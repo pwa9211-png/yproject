@@ -1,241 +1,246 @@
-// pages/index.js (React Component for the main page)
-
+import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
-import React from 'react';
 
-// --- 前端 JavaScript 逻辑封装 ---
-// 这个组件包含了所有处理聊天室加入、消息发送、轮询获取新消息的纯 JavaScript 代码。
-const FrontEndScript = () => {
-    return (
-        <script
-            // 使用 dangerouslySetInnerHTML 来嵌入纯 JS，使其在浏览器中执行
-            dangerouslySetInnerHTML={{
-                __html: `
-                let currentRoomId = null;
-                let currentNickname = null;
-                let lastMessageCount = 0; 
-                const AI_NAME = '环球智囊';
-                const SYSTEM_PROMPT = "你是一位资深且专业的旅行规划师。你的任务是根据两位用户的对话，为他们提供有创意、详细、切合实际的旅行建议和行程规划。你的回复应该专业、友善、富有条理，并能针对用户提出的不同需求（如预算、偏好、时间）提供定制化的解决方案。每次回复都要考虑到两位用户的发言上下文。";
-                const messageHistory = []; 
-                let pollingInterval;
-                let isSending = false;
-
-                function appendMessage(sender, content, type) {
-                    const chatWindow = document.getElementById('chat-window');
-                    
-                    const role = type === 'ai' ? 'assistant' : 'user';
-                    // 确保发送给 AI 的内容带有发送者信息，用于多轮对话上下文
-                    const messageContentForAI = type === 'ai' ? content : sender + ' 说: ' + content; 
-                    
-                    // 仅将有效的用户和AI消息添加到历史中（避免重复添加）
-                    if (sender !== '系统' && (messageHistory.length === 0 || messageHistory[messageHistory.length - 1].content !== messageContentForAI)) {
-                        messageHistory.push({ role: role, content: messageContentForAI });
-                    }
-
-                    // 创建消息 DOM 元素
-                    const msgDiv = document.createElement('div');
-                    msgDiv.className = type === 'ai' ? 'message message-ai' : 'message message-user';
-
-                    const contentDiv = document.createElement('div');
-                    contentDiv.className = 'message-content';
-
-                    let senderDisplay = type === 'ai' ? ' (' + AI_NAME + ')' : ' (' + sender + ')';
-                    if (type === 'system') {
-                        senderDisplay = '系统提示';
-                        contentDiv.style.backgroundColor = '#ffcdd2';
-                        contentDiv.style.color = '#333';
-                        contentDiv.style.fontWeight = 'bold';
-                    }
-                    
-                    contentDiv.innerHTML = '<strong>' + senderDisplay + '</strong><br>' + content;
-                    msgDiv.appendChild(contentDiv);
-                    
-                    chatWindow.appendChild(msgDiv);
-                    chatWindow.scrollTop = chatWindow.scrollHeight;
-                }
-                
-                async function fetchNewMessages(isInitialization = false) {
-                    if (!currentRoomId) return;
-                    
-                    try {
-                        const response = await fetch('/api/history?room_id=' + currentRoomId);
-                        if (!response.ok) throw new Error('无法连接 API');
-
-                        const data = await response.json();
-                        const allMessages = data.messages || []; 
-                        
-                        if (isInitialization) {
-                            // 清空 DOM 和本地历史记录
-                            document.getElementById('chat-window').innerHTML = '';
-                            messageHistory.length = 0; 
-                            lastMessageCount = 0;
-                        }
-
-                        if (allMessages.length > lastMessageCount) {
-                            // 遍历并显示新消息
-                            for (let i = lastMessageCount; i < allMessages.length; i++) {
-                                const msg = allMessages[i];
-                                appendMessage(msg.sender, msg.content, msg.type); 
-                            }
-                            lastMessageCount = allMessages.length;
-                        }
-                    } catch (error) {
-                        console.error('获取新消息出错:', error);
-                        if (isInitialization) {
-                             appendMessage('系统', '无法加载聊天历史，请检查后端配置和网络连接。', 'system');
-                        }
-                    }
-                }
-
-                async function fetchHistoryAndInitialize() {
-                    await fetchNewMessages(true);
-                    
-                    if (lastMessageCount === 0) {
-                         appendMessage('系统', '欢迎 ' + currentNickname + ' 加入房间 ' + currentRoomId + '。我是环球智囊，很高兴能为二位规划旅行！请开始吧。', 'system');
-                    }
-                }
-                
-                function startPolling() {
-                     if (pollingInterval) clearInterval(pollingInterval);
-                     // 启动定时轮询，每 3 秒检查一次新消息
-                     pollingInterval = setInterval(fetchNewMessages, 3000); 
-                }
-                
-                // --- 挂载到 window，供 React 组件调用 ---
-                window.joinChat = function() { 
-                    currentNickname = document.getElementById('nickname').value.trim();
-                    currentRoomId = document.getElementById('room-id').value.trim();
-
-                    if (!currentNickname || !currentRoomId) {
-                        alert('请填写称呼和聊天室号码！');
-                        return;
-                    }
-
-                    document.getElementById('join-form').style.display = 'none';
-                    document.getElementById('chat-area').style.display = 'flex';
-                    document.getElementById('current-room-id').textContent = currentRoomId;
-
-                    fetchHistoryAndInitialize();
-                    startPolling();
-                }
-
-                window.sendMessage = async function() { 
-                    if (isSending) return;
-
-                    const userInput = document.getElementById('user-input');
-                    const message = userInput.value.trim();
-                    userInput.value = '';
-
-                    if (message === '' || !currentRoomId || !currentNickname) return;
-
-                    isSending = true;
-                    userInput.disabled = true;
-                    
-                    const currentMessage = { role: 'user', content: currentNickname + ' 说: ' + message };
-                    // 构造发送给 AI 的完整历史记录
-                    const historyForAI = [...messageHistory, currentMessage]; 
-                    
-                    try {
-                        const response = await fetch('/api/chat', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                room_id: currentRoomId,
-                                nickname: currentNickname,
-                                message: message,
-                                history: historyForAI, 
-                                system_prompt: SYSTEM_PROMPT 
-                            })
-                        });
-
-                        if (!response.ok) {
-                            const errorData = await response.json();
-                            throw new Error('API 请求失败: ' + (errorData.message || response.statusText));
-                        }
-
-                        // AI 回复完成后，立即手动触发一次历史更新，确保消息被显示
-                        await fetchNewMessages(); 
-
-                    } catch (error) {
-                        console.error('发送消息或获取 AI 回复出错:', error);
-                        appendMessage('系统', '发送失败，请稍后重试。原因: ' + error.message, 'system');
-                    } finally {
-                        isSending = false;
-                        userInput.disabled = false;
-                        userInput.focus();
-                    }
-                }
-            `}}
-        />
-    );
+// --- 样式定义 ---
+const styles = {
+  container: {
+    maxWidth: '800px',
+    margin: '0 auto',
+    padding: '20px',
+    fontFamily: 'Arial, sans-serif',
+  },
+  header: {
+    textAlign: 'center',
+    borderBottom: '2px solid #333',
+    paddingBottom: '10px',
+    marginBottom: '20px',
+  },
+  chatWindow: {
+    height: '400px',
+    border: '1px solid #ccc',
+    borderRadius: '8px',
+    padding: '10px',
+    overflowY: 'scroll',
+    marginBottom: '10px',
+    backgroundColor: '#f9f9f9',
+  },
+  message: {
+    marginBottom: '10px',
+    padding: '8px',
+    borderRadius: '15px',
+    maxWidth: '70%',
+  },
+  userMessage: {
+    backgroundColor: '#007bff',
+    color: 'white',
+    marginLeft: 'auto',
+    textAlign: 'right',
+  },
+  aiMessage: {
+    backgroundColor: '#e9ecef',
+    color: '#333',
+    textAlign: 'left',
+  },
+  systemMessage: {
+    textAlign: 'center',
+    color: '#dc3545',
+    marginBottom: '10px',
+  },
+  inputArea: {
+    display: 'flex',
+  },
+  input: {
+    flexGrow: 1,
+    padding: '10px',
+    border: '1px solid #ccc',
+    borderRadius: '4px 0 0 4px',
+  },
+  button: {
+    padding: '10px 15px',
+    backgroundColor: '#28a745',
+    color: 'white',
+    border: 'none',
+    borderRadius: '0 4px 4px 0',
+    cursor: 'pointer',
+  },
+  userList: {
+    position: 'fixed',
+    top: '20px',
+    right: '20px',
+    width: '200px',
+    border: '1px solid #ccc',
+    padding: '10px',
+    borderRadius: '8px',
+    backgroundColor: '#fff',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+  },
+  userItem: {
+    marginBottom: '5px',
+    fontWeight: 'bold',
+    color: '#007bff',
+  },
 };
+// --- 组件开始 ---
 
-// --- Next.js 页面主组件 ---
-export default function Home() {
-    return (
-        <>
-            <Head>
-                <title>双人 AI 聊天室 - 环球智囊</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                {/* 使用 style jsx global 嵌入 CSS 样式 */}
-                <style jsx global>{`
-                    /* 将所有 CSS 样式放在这里 */
-                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 20px auto; padding: 0 20px; background-color: #f7f7f7; }
-                    h2 { text-align: center; color: #333; }
-                    #join-form { display: flex; gap: 10px; margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background-color: #fff; }
-                    #join-form input, #join-form button { padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
-                    #join-form button { background-color: #007bff; color: white; cursor: pointer; transition: background-color 0.3s; }
-                    #join-form button:hover { background-color: #0056b3; }
-                    
-                    #chat-area { display: flex; flex-direction: column; height: 65vh; border: 1px solid #ddd; border-radius: 8px; background-color: #fff; }
-                    #chat-info { padding: 10px 15px; background-color: #e9ecef; border-bottom: 1px solid #ddd; font-size: 0.9em; }
-                    
-                    #chat-window { flex-grow: 1; overflow-y: scroll; padding: 15px; }
-                    .message { margin-bottom: 10px; display: flex; }
-                    .message-content { padding: 8px 12px; border-radius: 18px; max-width: 70%; line-height: 1.5; font-size: 0.95em; }
-                    
-                    .message-ai { justify-content: flex-start; }
-                    .message-ai .message-content { background-color: #e6f7ff; border-top-left-radius: 0; color: #333; }
-                    
-                    .message-user { justify-content: flex-end; }
-                    .message-user .message-content { background-color: #007bff; color: white; border-top-right-radius: 0; }
-                    
-                    #input-area { display: flex; padding: 10px; border-top: 1px solid #ddd; }
-                    #user-input { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; margin-right: 10px; }
-                    #input-area button { padding: 10px 15px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; }
-                    #input-area button:hover { background-color: #1e7e34; }
-                `}</style>
-            </Head>
+const aiRole = "环球智囊"; // 定义 AI 的角色名称
+const room = "1"; // 定义房间号
+const fixedSender = "shane"; // 定义用户名称
 
-            <main>
-                <h2>✈️ 双人 AI 旅行规划聊天室</h2>
-                
-                <div id="join-form">
-                    <input type="text" id="nickname" placeholder="您的称呼 (例如: 小王)" defaultValue="用户A" />
-                    <input type="text" id="room-id" placeholder="聊天室号码 (例如: 123456)" defaultValue="123456" />
-                    <button onClick={() => window.joinChat()}>加入/创建聊天室</button>
+export default function ChatRoom() {
+  const [messages, setMessages] = useState([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const chatWindowRef = useRef(null);
+
+  // 自动滚动到底部
+  useEffect(() => {
+    if (chatWindowRef.current) {
+      chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  // 初始化：加载历史消息
+  useEffect(() => {
+    async function loadHistory() {
+      try {
+        const res = await fetch(`/api/history?room=${room}`);
+        if (!res.ok) {
+          throw new Error('网络连接错误或服务器失败。');
+        }
+        const data = await res.json();
+        setMessages([
+          { role: 'system', message: `欢迎 ${fixedSender} 加入房间 ${room}。AI 角色: **${aiRole}**。` },
+          ...data.messages,
+        ]);
+      } catch (error) {
+        setMessages([
+          { role: 'system', message: `无法加载聊天历史，请检查后端配置和网络连接。` },
+          { role: 'system', message: `欢迎 ${fixedSender} 加入房间 ${room}。我是 ${aiRole}，很高兴为您规划旅行！` },
+        ]);
+        console.error('Error loading history:', error);
+      }
+    }
+    loadHistory();
+  }, []);
+
+  // 处理消息发送
+  const handleSend = async () => {
+    if (!inputMessage.trim() || isLoading) return;
+
+    const userMsg = { role: 'user', message: inputMessage.trim(), sender: fixedSender };
+    setMessages(prev => [...prev, userMsg]);
+    setInputMessage('');
+    setIsLoading(true);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room: room, // <--- 关键字段
+          sender: fixedSender, // <--- 关键字段
+          message: inputMessage.trim(), // <--- 关键字段
+          aiRole: aiRole, // <--- 关键字段
+        }),
+      });
+
+      if (!res.ok) {
+        // 尝试解析服务器返回的错误消息
+        const errorData = await res.json().catch(() => ({ message: '未知错误' }));
+        throw new Error(`API 请求失败: ${errorData.message}`);
+      }
+
+      const data = await res.json();
+      const aiMsg = { role: 'assistant', message: data.aiResponse, sender: aiRole };
+      setMessages(prev => [...prev, aiMsg]);
+
+    } catch (error) {
+      console.error('Error sending message:', error);
+      // 显示系统提示失败信息
+      setMessages(prev => [...prev, {
+        role: 'system',
+        message: `发送失败，请稍后重试。原因: ${error.message}`,
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleSend();
+    }
+  };
+
+  return (
+    <>
+      <Head>
+        <title>双人 AI 旅行规划聊天室</title>
+      </Head>
+      <div style={styles.container}>
+        <header style={styles.header}>
+          <h1>
+            <span role="img" aria-label="user">👤</span>
+            <span role="img" aria-label="ai">🤖</span>
+            {" "}双人 AI 旅行规划聊天室
+          </h1>
+          <p>当前房间: {room} | AI 角色: **{aiRole}** ({fixedSender})</p>
+        </header>
+
+        {/* 成员列表 (简化版) */}
+        <div style={styles.userList}>
+          <h4>在线成员</h4>
+          <p style={styles.userItem}>{fixedSender} (你)</p>
+          <p style={{ ...styles.userItem, color: '#28a745' }}>{aiRole} (AI)</p>
+        </div>
+
+        {/* 聊天窗口 */}
+        <div style={styles.chatWindow} ref={chatWindowRef}>
+          {messages.map((msg, index) => {
+            if (msg.role === 'system') {
+              return (
+                <div key={index} style={styles.systemMessage}>
+                  系统提示: {msg.message}
                 </div>
+              );
+            }
+            // 正常消息
+            const isUser = msg.sender === fixedSender;
+            return (
+              <div
+                key={index}
+                style={{
+                  ...styles.message,
+                  ...(isUser ? styles.userMessage : styles.aiMessage),
+                }}
+              >
+                <strong>{msg.sender}:</strong> {msg.message}
+              </div>
+            );
+          })}
+          {isLoading && (
+            <div style={{ ...styles.message, ...styles.aiMessage }}>
+              <strong>{aiRole}:</strong> 正在思考...
+            </div>
+          )}
+        </div>
 
-                <div id="chat-area" style={{ display: 'none' }}>
-                    <div id="chat-info">当前房间：<strong id="current-room-id"></strong> | AI 角色：**环球智囊**</div>
-                    <div id="chat-window">
-                        {/* 聊天消息将显示在这里 */}
-                    </div>
-                    <div id="input-area">
-                        <input 
-                            type="text" 
-                            id="user-input" 
-                            placeholder="输入您的消息..." 
-                            // 监听回车键发送消息
-                            onKeyPress={(e) => { if (e.key === 'Enter') window.sendMessage(); }}
-                        />
-                        <button onClick={() => window.sendMessage()}>发送</button>
-                    </div>
-                </div>
-            </main>
-            
-            {/* 插入前端逻辑脚本 */}
-            <FrontEndScript />
-        </>
-    );
+        {/* 输入区域 */}
+        <div style={styles.inputArea}>
+          <input
+            type="text"
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="输入您的信息..."
+            style={styles.input}
+            disabled={isLoading}
+          />
+          <button onClick={handleSend} style={styles.button} disabled={isLoading}>
+            {isLoading ? '发送中' : '发送'}
+          </button>
+        </div>
+      </div>
+    </>
+  );
 }
