@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
+import ReactMarkdown from 'react-markdown'; // 导入 Markdown 渲染器
+import remarkGfm from 'remark-gfm';         // 导入对表格、删除线等扩展格式的支持
 
 // --- 常量 ---
 const aiRole = "环球智囊";
-const HISTORY_POLLING_INTERVAL = 3000; // 历史消息轮询间隔 (3秒)
-const HEARTBEAT_INTERVAL = 10000;      // 心跳发送间隔 (10秒)
-const OFFLINE_THRESHOLD = 30000;       // 离线判定阈值 (30秒)
+const HISTORY_POLLING_INTERVAL = 3000;
+const HEARTBEAT_INTERVAL = 10000;
+const OFFLINE_THRESHOLD = 30000;
 
-// --- 样式定义 (保持不变) ---
+// --- 样式定义 ---
 const styles = {
-    // ... (所有样式保持不变，参考上一个完整版本) ...
     container: { maxWidth: '800px', margin: '0 auto', padding: '20px', fontFamily: 'Arial, sans-serif' },
     header: { textAlign: 'center', paddingBottom: '10px', marginBottom: '20px' },
     headerActions: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' },
@@ -46,6 +47,17 @@ const styles = {
         '&:hover': {
             backgroundColor: '#f0f0f0',
         }
+    },
+    // 新增：Markdown 渲染器内联样式 (重要：覆盖默认的H1等样式，防止破坏布局)
+    markdownComponents: {
+        h1: ({ node, ...props }) => <h3 style={{ margin: '8px 0', borderBottom: '1px solid #ccc' }} {...props} />,
+        h2: ({ node, ...props }) => <h4 style={{ margin: '6px 0', color: '#007bff' }} {...props} />,
+        h3: ({ node, ...props }) => <h5 style={{ margin: '4px 0', color: '#28a745' }} {...props} />,
+        ul: ({ node, ...props }) => <ul style={{ paddingLeft: '20px', margin: '5px 0' }} {...props} />,
+        ol: ({ node, ...props }) => <ol style={{ paddingLeft: '20px', margin: '5px 0' }} {...props} />,
+        p: ({ node, ...props }) => <p style={{ margin: '4px 0', lineHeight: '1.4' }} {...props} />,
+        strong: ({ node, ...props }) => <strong style={{ fontWeight: 'bold' }} {...props} />,
+        a: ({ node, ...props }) => <a style={{ color: '#007bff' }} {...props} />,
     }
 };
 
@@ -107,7 +119,6 @@ function ChatRoom({ username, room, aiRole }) {
     const lastMessageCountRef = useRef(0);
     const inputRef = useRef(null);
     
-    // **新增：心跳发送函数**
     const sendHeartbeat = async () => {
         try {
             await fetch('/api/heartbeat', {
@@ -120,7 +131,6 @@ function ChatRoom({ username, room, aiRole }) {
         }
     };
 
-    // **轮询函数**：加载历史消息 *并* 更新在线成员列表
     const loadHistory = async (isManual = false) => {
         try {
             // 1. 获取聊天历史
@@ -128,7 +138,7 @@ function ChatRoom({ username, room, aiRole }) {
             if (!historyRes.ok) throw new Error('无法获取历史记录。');
             const historyData = await historyRes.json();
             
-            // 2. 获取实时在线状态 (新增 API)
+            // 2. 获取实时在线状态
             const statusRes = await fetch(`/api/online-status?room=${room}`);
             if (!statusRes.ok) throw new Error('无法获取在线状态。');
             const statusData = await statusRes.json();
@@ -160,7 +170,6 @@ function ChatRoom({ username, room, aiRole }) {
 
         } catch (error) {
             console.error('Error loading data:', error);
-            // ... (错误处理逻辑保持不变) ...
             if (lastMessageCountRef.current === 0) {
                  setMessages([
                     { role: 'system', message: `无法加载聊天历史/在线状态，请检查后端配置和网络连接。错误信息: ${error.message}` },
@@ -170,21 +179,17 @@ function ChatRoom({ username, room, aiRole }) {
         }
     };
 
-    // **心跳和轮询启动**
+    // 心跳和轮询启动
     useEffect(() => {
-        // 立即发送心跳
         sendHeartbeat(); 
         
-        // 启动心跳定时器
         const heartbeatIntervalId = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
         
-        // 启动历史轮询定时器
         loadHistory(); 
         const historyIntervalId = setInterval(() => {
             loadHistory();
         }, HISTORY_POLLING_INTERVAL);
 
-        // 组件卸载时清除定时器
         return () => {
             clearInterval(heartbeatIntervalId);
             clearInterval(historyIntervalId);
@@ -198,9 +203,7 @@ function ChatRoom({ username, room, aiRole }) {
         }
     }, [messages]);
     
-    // ... (输入框、@ 选单、消息发送等逻辑保持不变) ...
-    
-    // 处理输入框变化
+    // 输入框和发送逻辑 (保持不变)
     const handleInputChange = (e) => {
         const value = e.target.value;
         setInputMessage(value);
@@ -213,7 +216,6 @@ function ChatRoom({ username, room, aiRole }) {
         }
     };
     
-    // 处理选择成员
     const handleSelectMember = (member) => {
         const newValue = inputMessage.replace(/@$/, '') + `@${member} `; 
         setInputMessage(newValue);
@@ -223,7 +225,6 @@ function ChatRoom({ username, room, aiRole }) {
 
     const filteredMembers = onlineMembers.filter(member => member !== username);
 
-    // 处理消息发送
     const handleSend = async () => {
         if (!inputMessage.trim() || isLoading) return;
         setShowSuggestions(false);
@@ -233,7 +234,6 @@ function ChatRoom({ username, room, aiRole }) {
         setInputMessage('');
         setIsLoading(true);
         
-        // 发送消息前，也发送一次心跳，确保活跃状态
         await sendHeartbeat();
 
         try {
@@ -274,7 +274,7 @@ function ChatRoom({ username, room, aiRole }) {
     
     // 导出对话记录处理函数 (HTML格式) - 保持不变
     const handleExportChat = () => {
-        // ... (HTML 导出逻辑保持不变) ...
+        // ... (HTML 导出逻辑保持不变，用于下载文件) ...
         const chatContentHtml = messages.map(msg => {
             if (msg.role === 'system') {
                 return `<p style="text-align: center; color: #dc3545; font-style: italic; font-family: Arial, sans-serif;">--- 系统提示: ${msg.message} ---</p>`;
@@ -302,10 +302,14 @@ function ChatRoom({ username, room, aiRole }) {
                 }
             `;
             
+            // 确保导出的 HTML 也使用 Markdown 格式渲染，以保持一致性
+            // 注意：这里我们只导出消息文本，不包含 ReactMarkdown 组件
+            const messageContent = msg.message.replace(/\n/g, '<br>');
+            
             return `
                 <div style="${messageStyle}">
                     <strong>${msg.sender}</strong> (${date}):<br>
-                    ${msg.message.replace(/\n/g, '<br>')}
+                    ${messageContent}
                 </div>
             `;
         }).join('\n');
@@ -322,6 +326,7 @@ function ChatRoom({ username, room, aiRole }) {
                     h1 { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; font-family: Arial, sans-serif; }
                     p { font-family: Arial, sans-serif; }
                     .chat-log { border: 1px solid #ccc; padding: 20px; border-radius: 8px; }
+                    /* 导出文件中的Markdown样式也可以在这里定制 */
                 </style>
             </head>
             <body>
@@ -348,7 +353,6 @@ function ChatRoom({ username, room, aiRole }) {
         alert('对话已成功导出为 HTML 文件，用浏览器打开即可查看。');
     };
     
-    // 清空对话记录处理函数 - 保持不变
     const handleClearChat = async () => {
         if (!window.confirm(`确定要清空房间 ${room} 的所有 ${messages.length - 1} 条对话记录吗？此操作不可撤销！`)) {
             return;
@@ -425,7 +429,18 @@ function ChatRoom({ username, room, aiRole }) {
                                     ...styles.message,
                                     ...(isUser ? styles.userMessage : styles.aiMessage),
                                 }}>
-                                <strong>{msg.sender}:</strong> {msg.message}
+                                <strong>{msg.sender}:</strong> 
+                                {/* 核心变化：使用 ReactMarkdown 渲染消息内容 */}
+                                <div style={{ 
+                                    color: isUser ? 'white' : '#333', // 确保文本颜色正确
+                                    textAlign: 'left' // 强制 Markdown 内容左对齐
+                                }}>
+                                    <ReactMarkdown
+                                        children={msg.message}
+                                        remarkPlugins={[remarkGfm]}
+                                        components={styles.markdownComponents} // 使用定制的组件样式
+                                    />
+                                </div>
                             </div>
                         );
                     })}
