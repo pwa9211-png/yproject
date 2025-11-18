@@ -2,9 +2,6 @@ import { MongoClient } from 'mongodb';
 
 // MongoDB 配置
 const uri = process.env.MONGODB_URI;
-// 注意：客户端连接对象必须在每次请求时重新创建或使用全局连接池。
-// Vercel Serverless 环境推荐在 handler 内部或使用一个单独的连接函数。
-// 为了简化，这里直接在文件顶部实例化，并在 try/finally 中连接/关闭。
 const client = new MongoClient(uri); 
 
 export default async function handler(req, res) {
@@ -21,8 +18,8 @@ export default async function handler(req, res) {
 
   try {
     await client.connect();
-    const db = client.db('chatDB'); // 假设数据库名为 chatDB
-    const messagesCollection = db.collection('messages'); // 假设集合名为 messages
+    const db = client.db('chatDB');
+    const messagesCollection = db.collection('messages');
 
     // 查找房间内所有消息，并按时间戳升序排序 (确保正确的聊天顺序)
     const messages = await messagesCollection.find({ room })
@@ -51,7 +48,6 @@ export default async function handler(req, res) {
     });
   } finally {
     // 确保连接在请求结束后关闭
-    // 在 Vercel Serverless 环境中，这是一个重要的清理步骤
     await client.close();
   }
 }

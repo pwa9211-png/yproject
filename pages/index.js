@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 
-// --- 样式定义 ---
+// --- 样式定义 (保持不变) ---
 const styles = {
     container: { maxWidth: '800px', margin: '0 auto', padding: '20px', fontFamily: 'Arial, sans-serif' },
     header: { textAlign: 'center', borderBottom: '2px solid #333', paddingBottom: '10px', marginBottom: '20px' },
@@ -20,6 +20,7 @@ const styles = {
 // --- 组件定义 ---
 
 const aiRole = "环球智囊"; // 固定 AI 的角色名称
+const POLLING_INTERVAL = 3000; // 轮询间隔：3000 毫秒 (3 秒)
 
 // 主应用组件，包含登录逻辑
 export default function IndexPage() {
@@ -68,13 +69,62 @@ export default function IndexPage() {
     return <ChatRoom username={username} room={room} aiRole={aiRole} />;
 }
 
-// ChatRoom 组件 (从原 index.js 提取)
+// ChatRoom 组件 (已整合轮询)
 function ChatRoom({ username, room, aiRole }) {
     const [messages, setMessages] = useState([]);
     const [inputMessage, setInputMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const chatWindowRef = useRef(null);
+    const lastMessageCountRef = useRef(0); // 用于判断是否需要滚动
 
+    // **轮询函数**：加载历史消息
+    const loadHistory = async (isManual = false) => {
+        try {
+            const res = await fetch(`/api/history?room=${room}`);
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({ message: '网络连接错误或服务器失败。' }));
+                throw new Error(errorData.message || '网络连接错误或服务器失败。');
+            }
+            const data = await res.json();
+            
+            // 确保 system message 始终在最前面
+            const newMessages = [
+                { role: 'system', message: `欢迎 ${username} 加入房间 ${room}。AI 角色: **${aiRole}**。` },
+                ...data.messages,
+            ];
+
+            // 只有当消息数量发生变化时才更新状态
+            if (newMessages.length !== lastMessageCountRef.current) {
+                 setMessages(newMessages);
+                 lastMessageCountRef.current = newMessages.length;
+            } else if (isManual) {
+                // 如果是手动发送消息后，即使数量没变也要刷新
+                setMessages(newMessages);
+            }
+
+        } catch (error) {
+            console.error('Error loading history:', error);
+            // 只有首次加载失败才显示红色的系统提示
+            if (lastMessageCountRef.current === 0) {
+                 setMessages([
+                    { role: 'system', message: `无法加载聊天历史，请检查后端配置和网络连接。错误信息: ${error.message}` },
+                    { role: 'system', message: `欢迎 ${username} 加入房间 ${room}。我是 ${aiRole}，很高兴为您规划旅行！` },
+                ]);
+            }
+        }
+    };
+
+    // 首次加载和轮询逻辑
+    useEffect(() => {
+        loadHistory(); // 首次立即加载
+        
+        const intervalId = setInterval(() => {
+            loadHistory();
+        }, POLLING_INTERVAL); // 每隔 3 秒加载一次
+
+        return () => clearInterval(intervalId); // 清除定时器
+    }, [room, username, aiRole]); 
+    
     // 自动滚动到底部
     useEffect(() => {
         if (chatWindowRef.current) {
@@ -82,40 +132,13 @@ function ChatRoom({ username, room, aiRole }) {
         }
     }, [messages]);
 
-    // 初始化：加载历史消息
-    useEffect(() => {
-        async function loadHistory() {
-            try {
-                const res = await fetch(`/api/history?room=${room}`);
-                if (!res.ok) {
-                    const errorData = await res.json().catch(() => ({ message: '网络连接错误或服务器失败。' }));
-                    throw new Error(errorData.message || '网络连接错误或服务器失败。');
-                }
-                const data = await res.json();
-                
-                // 确保 system message 始终在最前面
-                setMessages([
-                    { role: 'system', message: `欢迎 ${username} 加入房间 ${room}。AI 角色: **${aiRole}**。` },
-                    ...data.messages,
-                ]);
-
-            } catch (error) {
-                console.error('Error loading history:', error);
-                setMessages([
-                    { role: 'system', message: `无法加载聊天历史，请检查后端配置和网络连接。错误信息: ${error.message}` },
-                    { role: 'system', message: `欢迎 ${username} 加入房间 ${room}。我是 ${aiRole}，很高兴为您规划旅行！` },
-                ]);
-            }
-        }
-        loadHistory();
-    }, [room, username, aiRole]); // 依赖 room, username, aiRole
-
     // 处理消息发送
     const handleSend = async () => {
         if (!inputMessage.trim() || isLoading) return;
 
         const userMsg = { role: 'user', message: inputMessage.trim(), sender: username };
-        setMessages(prev => [...prev, userMsg]);
+        // 立即在前端显示用户消息
+        setMessages(prev => [...prev, userMsg]); 
         setInputMessage('');
         setIsLoading(true);
 
@@ -136,9 +159,8 @@ function ChatRoom({ username, room, aiRole }) {
                 throw new Error(errorData.message || `API 请求失败: ${res.status}`);
             }
 
-            const data = await res.json();
-            const aiMsg = { role: 'assistant', message: data.aiResponse, sender: aiRole };
-            setMessages(prev => [...prev, aiMsg]);
+            // 消息发送后，手动触发一次历史加载，以立即显示 AI 回复
+            await loadHistory(true); 
 
         } catch (error) {
             console.error('Error sending message:', error);
