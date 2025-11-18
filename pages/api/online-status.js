@@ -1,8 +1,5 @@
-import { MongoClient } from 'mongodb';
-
-// MongoDB 配置
-const uri = process.env.MONGODB_URI;
-const client = new MongoClient(uri);
+// pages/api/online-status.js
+import clientPromise from '../../lib/mongodb'; // <-- 导入新连接
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -16,7 +13,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    await client.connect();
+    const client = await clientPromise;
     const db = client.db('chatDB');
     const statusCollection = db.collection('userStatus'); 
 
@@ -29,10 +26,9 @@ export default async function handler(req, res) {
     console.error('Online Status API Error:', error);
 
     res.status(500).json({ 
-        message: '无法获取在线状态列表。', 
+        message: '无法获取在线状态列表。请检查数据库连接和lib/mongodb.js配置。', 
         details: error.message 
     });
-  } finally {
-    // await client.close(); 
   }
+  // 移除 client.close()
 }

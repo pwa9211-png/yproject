@@ -1,8 +1,5 @@
-import { MongoClient } from 'mongodb';
-
-// MongoDB 配置
-const uri = process.env.MONGODB_URI;
-const client = new MongoClient(uri);
+// pages/api/heartbeat.js
+import clientPromise from '../../lib/mongodb'; // <-- 导入新连接
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -16,16 +13,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    await client.connect();
-    const db = client.db('chatDB');
-    // 使用新的 collection 来存储用户的实时状态
+    // 使用已连接的客户端
+    const client = await clientPromise; 
+    // 注意：MongoDB 数据库名称是从 MONGODB_URI 中解析出来的
+    const db = client.db('chatDB'); 
     const statusCollection = db.collection('userStatus'); 
 
     // 1. 更新或插入用户的活跃时间
     await statusCollection.updateOne(
-      { room: room, username: username }, // 查询条件：房间和用户名
-      { $set: { lastActive: new Date() } }, // 更新内容：当前时间
-      { upsert: true } // 如果不存在就插入
+      { room: room, username: username }, 
+      { $set: { lastActive: new Date() } }, 
+      { upsert: true } 
     );
 
     res.status(200).json({ success: true, message: 'Heartbeat recorded.' });
@@ -34,11 +32,9 @@ export default async function handler(req, res) {
     console.error('Heartbeat API Error:', error);
 
     res.status(500).json({ 
-        message: '无法记录心跳，请检查数据库连接。', 
+        message: '无法记录心跳，请检查数据库连接和lib/mongodb.js配置。', 
         details: error.message 
     });
-  } finally {
-    // 注意：在 Vercel 中，连接可能会被复用，但为了安全关闭。
-    // await client.close(); 
   }
+  // 移除 client.close()
 }
