@@ -1,10 +1,10 @@
 // pages/index.js
 import Head from 'next/head';
 import { useState, useEffect, useRef } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import ReactMarkdown from 'react-markdown'; // 重新导入
+import remarkGfm from 'remark-gfm'; // 重新导入
 
-// 定义一个简单的CSS对象来代替Home.module.css，以保持基本的居中和聊天区域
+// 定义一个简单的CSS对象来代替Home.module.css，以提供基本样式
 const simpleStyles = {
     container: {
         minHeight: '100vh',
@@ -13,9 +13,11 @@ const simpleStyles = {
         flexDirection: 'column',
         justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: 'white',
+        color: '#333',
     },
     main: {
-        padding: '5rem 0',
+        padding: '2rem 0',
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
@@ -26,9 +28,9 @@ const simpleStyles = {
     title: {
         margin: '0',
         lineHeight: 1.15,
-        fontSize: '3rem',
+        fontSize: '2.5rem',
         textAlign: 'center',
-        marginBottom: '20px',
+        marginBottom: '25px',
     },
     chatArea: {
         width: '100%',
@@ -47,24 +49,29 @@ const simpleStyles = {
         marginBottom: '15px',
         paddingBottom: '10px',
         borderBottom: '1px solid #ddd',
+        width: '100%',
+        fontSize: '1rem',
     },
     messageContainer: {
         marginBottom: '15px',
         padding: '10px',
         borderRadius: '8px',
         clear: 'both',
+        overflow: 'hidden',
     },
     userMessage: {
         float: 'right',
         backgroundColor: '#0070f3',
         color: 'white',
         maxWidth: '70%',
+        marginLeft: 'auto',
     },
     modelMessage: {
         float: 'left',
         backgroundColor: '#eee',
         color: '#333',
         maxWidth: '70%',
+        marginRight: 'auto',
     },
     inputArea: {
         display: 'flex',
@@ -76,6 +83,7 @@ const simpleStyles = {
         marginRight: '10px',
         border: '1px solid #ccc',
         borderRadius: '4px',
+        fontSize: '1rem',
     },
     sendButton: {
         padding: '10px 20px',
@@ -84,6 +92,8 @@ const simpleStyles = {
         border: 'none',
         borderRadius: '4px',
         cursor: 'pointer',
+        fontSize: '1rem',
+        whiteSpace: 'nowrap',
     },
     errorBox: {
         padding: '10px',
@@ -92,7 +102,18 @@ const simpleStyles = {
         border: '1px solid #cc0000',
         borderRadius: '5px',
         marginBottom: '10px',
+        width: '100%',
     },
+    loginForm: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '15px',
+        width: '300px',
+        padding: '20px',
+        border: '1px solid #ddd',
+        borderRadius: '8px',
+        backgroundColor: '#fefefe',
+    }
 };
 
 
@@ -117,7 +138,7 @@ export default function Home() {
         scrollToBottom();
     }, [chatHistory]);
 
-    // 加载历史消息的逻辑（已简化，依赖您的API）
+    // 加载历史消息的逻辑
     const fetchHistory = async (currentRoom) => {
         if (!currentRoom) return;
         try {
@@ -139,7 +160,9 @@ export default function Home() {
         e.preventDefault();
         if (room && sender) {
             setIsLoggedIn(true);
-            fetchHistory(room);
+            // 在用户加入后，立即尝试加载历史
+            fetchHistory(room); 
+            setError(`系统提示: 欢迎 ${sender} 加入房间 ${room}。AI 角色: ${aiRole}`);
         } else {
             setError('请输入房间号和您的称呼！');
         }
@@ -187,7 +210,7 @@ export default function Home() {
                 body: JSON.stringify({
                     room,
                     sender,
-                    message: message.trim(),
+                    message: userMessage.message, // 使用 userMessage.message 以确保是发送的消息
                     aiRole: aiRole.replace(/\*\*/g, ''), // 移除 **
                 }),
             });
@@ -205,9 +228,6 @@ export default function Home() {
                         timestamp: new Date() 
                     };
                     setChatHistory(prev => [...prev, aiMessage]);
-                } else if (data.ai_reply === 'AI 未被 @，不回复。') {
-                     // 仅保存用户消息，AI 不回复
-                     // 不做任何操作，因为用户消息已在乐观更新中保存
                 }
                 setError(null);
             } else {
@@ -240,7 +260,7 @@ export default function Home() {
                         多人 AI 智能聊天室
                     </h1>
                     {error && <div style={simpleStyles.errorBox}>{error}</div>}
-                    <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '15px', width: '300px' }}>
+                    <form onSubmit={handleLogin} style={simpleStyles.loginForm}>
                         <input
                             type="text"
                             placeholder="输入房间号 (例如: 123)"
@@ -283,7 +303,7 @@ export default function Home() {
                 <div style={simpleStyles.chatHeader}>
                     <span>当前房间: **{room}** | AI 角色: {aiRole} ({sender})</span>
                     <div>
-                        {/* 导出对话逻辑需要额外的库支持，此处保留按钮 */}
+                        {/* 导出对话功能未实现，仅为占位符 */}
                         <button onClick={() => alert("导出对话功能待实现")} style={{ ...simpleStyles.sendButton, backgroundColor: '#6c757d', marginRight: '10px' }}>导出对话 (HTML)</button>
                         <button onClick={clearHistory} style={{ ...simpleStyles.sendButton, backgroundColor: '#dc3545' }}>清空对话</button>
                     </div>
@@ -299,7 +319,7 @@ export default function Home() {
                         }}>
                             <strong>{msg.sender}:</strong>
                             <div style={{ wordWrap: 'break-word', marginTop: '5px' }}>
-                                {/* 使用 ReactMarkdown 渲染内容 */}
+                                {/* 重新使用 ReactMarkdown 渲染内容 */}
                                 <ReactMarkdown children={msg.message} remarkPlugins={[remarkGfm]} />
                             </div>
                         </div>
@@ -323,6 +343,8 @@ export default function Home() {
 
                 <p style={{ marginTop: '10px', fontSize: '0.8rem', color: '#666' }}>
                     * AI 仅在被 @ 时回复 (例如: @{aiRole.replace(/\*\*/g, '')} 你好)
+                    <br/>
+                    * 使用 `/设定角色 [新角色描述]` 命令可以动态切换 AI 身份。
                 </p>
             </main>
         </div>
