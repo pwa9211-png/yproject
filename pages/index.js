@@ -1,8 +1,8 @@
 // pages/index.js
 import Head from 'next/head';
 import { useState, useEffect, useRef } from 'react';
-import ReactMarkdown from 'react-markdown'; // 重新导入
-import remarkGfm from 'remark-gfm'; // 重新导入
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // 定义一个简单的CSS对象来代替Home.module.css，以提供基本样式
 const simpleStyles = {
@@ -145,12 +145,15 @@ export default function Home() {
             const res = await fetch(`/api/history?room=${currentRoom}`);
             const data = await res.json();
             if (res.ok) {
-                setChatHistory(data.history);
+                // 确保 data.history 至少是一个空数组
+                setChatHistory(data.history || []); 
                 setError(null);
             } else {
+                setChatHistory([]); // 失败时清空
                 setError(`无法加载聊天历史，请检查后端配置和网络连接。错误信息: ${data.message || '未知错误'}`);
             }
         } catch (err) {
+            setChatHistory([]); // 失败时清空
             setError(`无法加载聊天历史，请检查后端配置和网络连接。错误信息: ${err.message}`);
         }
     };
@@ -312,7 +315,8 @@ export default function Home() {
                 {error && <div style={simpleStyles.errorBox}>{error}</div>}
 
                 <div style={simpleStyles.chatArea}>
-                    {chatHistory.map((msg, index) => (
+                    {/* 🚨 核心修复：添加 chatHistory && 检查，防止 map() 在 undefined 上调用 */}
+                    {chatHistory && chatHistory.map((msg, index) => ( 
                         <div key={index} style={{
                             ...simpleStyles.messageContainer,
                             ...(msg.role === 'user' ? simpleStyles.userMessage : simpleStyles.modelMessage),
