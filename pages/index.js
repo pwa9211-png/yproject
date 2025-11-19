@@ -1,33 +1,35 @@
-// ... (顶部导入部分保持不变)
+// pages/index.js
 
-// 聊天室的主组件
+import Head from 'next/head';
+import { useState, useEffect, useRef } from 'react';
+import styles from '../styles/Home.module.css'; // 确保导入
+
+// (如果使用了 ReactMarkdown，确保导入它)
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
 export default function Home() {
-    // ... (其他 useState 变量保持不变)
-
-    // *** 关键修改点 1：默认 AI 角色 ***
-    // 将 '环球智囊' 改为更通用的名称，例如 '万能助理'
+    // 默认 AI 角色 (已修改为万能助理)
     const aiRole = '**万能助理**'; 
-    // ...
+    
+    // ... (其他 useState 和 useEffect 逻辑)
 
     return (
-        <div className={styles.container}>
+        <div className={styles.container}> {/* 🚨 错误可能发生在这里 */}
             <Head>
-                {/* *** 关键修改点 2：网页标题 *** */}
                 <title>多人 AI 智能聊天室</title> 
                 <link rel="icon" href="/favicon.ico" />
             </Head>
 
             <main className={styles.main}>
-                {/* *** 关键修改点 3：页面横幅标题 *** */}
                 <h1 className={styles.title}>
                     <span role="img" aria-label="robot">🤖</span>
                     <span role="img" aria-label="person">🧑‍💻</span> 
                     多人 AI 智能聊天室
                 </h1>
                 
-                {/* ... (其他 JSX 元素保持不变) */}
+                {/* ... (其他 JSX 元素) */}
             </main>
-            {/* ... (组件末尾保持不变) */}
         </div>
     );
 }
