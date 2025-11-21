@@ -1,7 +1,7 @@
 // pages/api/chat.js
 
-// 🚨 路径修正: 从 /pages/api 向上跳一级到 /pages，再向上跳一级到项目根目录，然后进入 /lib
-import { connectToMongo } from '../../lib/mongodb'; // 确保这里是 mongodb
+// 🚨 修正路径：从 /pages/api 向上跳两级到项目根目录，然后进入 /lib/mongodb
+import { connectToMongo } from '../../lib/mongodb'; 
 import { GoogleGenAI } from '../../lib/ai';
 
 export default async function handler(req, res) {
@@ -21,11 +21,9 @@ export default async function handler(req, res) {
 
     // --- 🚨 权限控制逻辑 START ---
     const RESTRICTED_ROOM = '2';
-    // 严格区分大小写：只有 'Didy' 和 'Shane' 可以进入 2 号房间
     const ALLOWED_USERS = ['Didy', 'Shane']; 
 
     if (room === RESTRICTED_ROOM) {
-        // 严格检查发送者名称是否精确匹配白名单中的任一用户
         if (!ALLOWED_USERS.includes(sender)) {
             // 如果用户不在白名单内，拒绝操作
             return res.status(403).json({
@@ -37,7 +35,6 @@ export default async function handler(req, res) {
     // --- 权限控制逻辑 END ---
 
     try {
-        // 确保您的 connectToMongo 函数正确地导出了 ChatMessage 和 OnlineUser
         const { ChatMessage, OnlineUser } = await connectToMongo();
 
         const timestamp = new Date();
@@ -59,7 +56,8 @@ export default async function handler(req, res) {
             { upsert: true }
         );
 
-        // 3. 检查是否需要 AI 回复 
+
+        // 3. 检查是否需要 AI 回复 (用户是否 @AI)
         const aiMentionPattern = new RegExp(`@${aiRole.replace(/\*\*/g, '')}`, 'i');
         const setRoleCommandPattern = new RegExp('/设定角色\\s*(.+)', 'i');
         const roleMatch = message.match(setRoleCommandPattern);

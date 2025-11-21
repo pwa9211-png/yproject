@@ -1,34 +1,46 @@
 // pages/api/history.js
-// 🚨 修正导入: 使用 '../../lib/mongodb'
-import { connectToMongo } from '../../lib/mongodb';
+
+import { connectToMongo } from '../../lib/mongodb'; 
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
         return res.status(405).json({ success: false, message: 'Method Not Allowed' });
     }
 
-    const { room } = req.query;
+    const { room, sender } = req.query; // 必须从前端接收 sender
 
-    if (!room) {
-        return res.status(400).json({ success: false, message: 'Missing required query parameter: room.' });
+    if (!room || !sender) {
+        return res.status(400).json({ success: false, message: 'Missing required fields: room or sender.' });
     }
+
+    // --- 🚨 权限控制逻辑 START ---
+    const RESTRICTED_ROOM = '2';
+    const ALLOWED_USERS = ['Didy', 'Shane']; 
+
+    if (room === RESTRICTED_ROOM) {
+        if (!ALLOWED_USERS.includes(sender)) {
+            // 立即拒绝非白名单用户获取历史记录
+            return res.status(403).json({
+                success: false,
+                message: `房间 ${RESTRICTED_ROOM} 是限制房间。您无权查看历史对话。`,
+                history: [] // 返回空数组，不泄露任何数据
+            });
+        }
+    }
+    // --- 权限控制逻辑 END ---
 
     try {
         const { ChatMessage } = await connectToMongo();
 
+        // 获取房间的所有历史记录 (按时间升序)
         const history = await ChatMessage.find({ room })
             .sort({ timestamp: 1 })
-            .limit(50)
             .toArray();
 
         return res.status(200).json({ success: true, history });
 
     } catch (error) {
         console.error('History API Error:', error);
-        return res.status(500).json({ 
-            success: false, 
-            message: 'Database Error',
-            error: error.message
-        });
+        return res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 }
