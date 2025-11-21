@@ -1,6 +1,7 @@
 // pages/api/chat.js
 
-import { connectToMongo } from '../../lib/mongo';
+// 🚨 路径修正: 从 /pages/api 向上跳一级到 /pages，再向上跳一级到项目根目录，然后进入 /lib
+import { connectToMongo } from '../../lib/mongo'; 
 import { GoogleGenAI } from '../../lib/ai';
 
 export default async function handler(req, res) {
@@ -25,7 +26,7 @@ export default async function handler(req, res) {
 
         // --- 1. 保存用户消息到数据库 (关键：使用 room 字段) ---
         const userMessageDoc = { 
-            room, // 🚨 确保使用了 room 字段
+            room, // 确保使用了 room 字段
             sender, 
             message, 
             role: 'user', 
@@ -33,7 +34,7 @@ export default async function handler(req, res) {
         };
         await ChatMessage.insertOne(userMessageDoc);
 
-        // --- 2. 更新用户心跳 (在 online-status 中应更完善，此处也更新) ---
+        // --- 2. 更新用户心跳 (确保用户在线) ---
         await OnlineUser.updateOne(
             { room, sender },
             { $set: { last_seen: timestamp, sender } },
@@ -43,9 +44,9 @@ export default async function handler(req, res) {
         // --- 3. 检查是否需要 AI 回复 ---
         const aiName = aiRole.replace(/\*\*/g, ''); // 移除 Markdown 粗体
 
-        // 检查消息是否以 @AI_NAME 开头
-        const aiMentionPattern = new RegExp(`^@${aiName.toLowerCase()}\\s*`);
-        const isMentioned = message.toLowerCase().startsWith(`@${aiName.toLowerCase()}`) || message.toLowerCase().includes(`@${aiName.toLowerCase()}`);
+        // 检查消息是否包含 @AI_NAME
+        const aiMentionPattern = new RegExp(`@${aiName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i'); 
+        const isMentioned = aiMentionPattern.test(message);
 
         if (!isMentioned) {
             return res.status(200).json({ 
@@ -62,7 +63,7 @@ export default async function handler(req, res) {
             .limit(10)
             .toArray();
 
-        // 格式化历史记录为 Gemini/OpenAI 格式
+        // 格式化历史记录为 AI 格式
         const context = historyDocs.reverse().map(doc => ({
             role: doc.role === 'user' ? 'user' : 'model', 
             text: doc.message
@@ -77,7 +78,7 @@ export default async function handler(req, res) {
         
         // --- 6. 保存 AI 回复到数据库 ---
         const aiMessageDoc = { 
-            room, // 🚨 确保使用了 room 字段
+            room, // 确保使用了 room 字段
             sender: aiRole, 
             message: aiReply, 
             role: 'model', 

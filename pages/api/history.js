@@ -1,5 +1,6 @@
 // pages/api/history.js
 
+// 🚨 路径修正: 从 /pages/api 向上跳一级到 /pages，再向上跳一级到项目根目录，然后进入 /lib
 import { connectToMongo } from '../../lib/mongo';
 
 export default async function handler(req, res) {
@@ -18,7 +19,7 @@ export default async function handler(req, res) {
         const { ChatMessage } = await connectToMongo();
 
         // --- 2. 从数据库查询历史记录 (关键：使用 room 字段进行过滤) ---
-        const history = await ChatMessage.find({ room }) // 🚨 确保了按 room 过滤
+        const history = await ChatMessage.find({ room }) // 确保了按 room 过滤
             .sort({ timestamp: 1 }) // 按时间升序排列
             .limit(50) // 限制返回数量
             .toArray();
