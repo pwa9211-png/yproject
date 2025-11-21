@@ -441,7 +441,7 @@ export default function Home() {
                         />
                         <input
                             type="text"
-                            placeholder="输入您的称呼 (例如: shane)"
+                            placeholder="输入您的称呼 (例如: Bear)" // 🚨 仅此行修改
                             value={sender}
                             onChange={(e) => setSender(e.target.value)}
                             required
