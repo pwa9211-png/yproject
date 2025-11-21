@@ -1,6 +1,6 @@
 // pages/api/chat.js
-
-// 🚨 修正路径：从 /pages/api 向上跳两级到项目根目录，然后进入 /lib/mongodb
+// 请务必确保 lib/mongodb 和 lib/ai 文件存在
+// 🚨 修正导入路径：从 /pages/api 向上跳两级到项目根目录，然后进入 /lib/mongodb
 import { connectToMongo } from '../../lib/mongodb'; 
 import { GoogleGenAI } from '../../lib/ai';
 
@@ -19,7 +19,7 @@ export default async function handler(req, res) {
         });
     }
 
-    // --- 🚨 权限控制逻辑 START ---
+    // --- 权限控制逻辑 START ---
     const RESTRICTED_ROOM = '2';
     const ALLOWED_USERS = ['Didy', 'Shane']; 
 
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
             // 如果用户不在白名单内，拒绝操作
             return res.status(403).json({
                 success: false,
-                message: `房间 ${RESTRICTED_ROOM} 是限制房间。只有 ${ALLOWED_USERS.join(' 和 ')} 可以发送消息。`,
+                message: `房间 ${RESTRICTED_ROOM} 是限制房间。您的身份不被允许发送消息。`,
             });
         }
     }
