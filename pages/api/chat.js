@@ -1,7 +1,7 @@
 // pages/api/chat.js
 
-// 🚨 最终路径修正: 使用 '../../lib/'
-import { connectToMongo } from '../../lib/mongo'; 
+// 🚨 修正导入: 使用 '../../lib/mongodb' (注意文件名是 mongodb)
+import { connectToMongo } from '../../lib/mongodb'; 
 import { GoogleGenAI } from '../../lib/ai';
 
 export default async function handler(req, res) {
@@ -11,7 +11,6 @@ export default async function handler(req, res) {
 
     const { room, sender, message, aiRole } = req.body;
 
-    // 1. 字段验证
     if (!room || !sender || !message || !aiRole) {
         return res.status(400).json({ 
             success: false, 
@@ -21,30 +20,26 @@ export default async function handler(req, res) {
 
     try {
         const { ChatMessage, OnlineUser } = await connectToMongo();
-
         const timestamp = new Date();
 
-        // --- 1. 保存用户消息到数据库 (关键：使用 room 字段) ---
-        const userMessageDoc = { 
-            room, // 确保使用了 room 字段
+        // 1. 保存用户消息
+        await ChatMessage.insertOne({ 
+            room, 
             sender, 
             message, 
             role: 'user', 
             timestamp 
-        };
-        await ChatMessage.insertOne(userMessageDoc);
+        });
 
-        // --- 2. 更新用户心跳 (确保用户在线) ---
+        // 2. 更新用户心跳
         await OnlineUser.updateOne(
             { room, sender },
             { $set: { last_seen: timestamp, sender } },
             { upsert: true }
         );
 
-        // --- 3. 检查是否需要 AI 回复 ---
-        const aiName = aiRole.replace(/\*\*/g, ''); // 移除 Markdown 粗体
-
-        // 检查消息是否包含 @AI_NAME
+        // 3. 检查 AI 回复
+        const aiName = aiRole.replace(/\*\*/g, '');
         const aiMentionPattern = new RegExp(`@${aiName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i'); 
         const isMentioned = aiMentionPattern.test(message);
 
@@ -56,35 +51,31 @@ export default async function handler(req, res) {
             });
         }
         
-        // --- 4. 获取最近的聊天历史作为上下文 ---
-        // 获取房间的最近 10 条消息作为上下文
+        // 4. 获取上下文
         const historyDocs = await ChatMessage.find({ room })
             .sort({ timestamp: -1 })
             .limit(10)
             .toArray();
 
-        // 格式化历史记录为 AI 格式
         const context = historyDocs.reverse().map(doc => ({
             role: doc.role === 'user' ? 'user' : 'model', 
             text: doc.message
         }));
 
-        // 添加当前用户消息到上下文，并清理 @mention
         const cleanMessage = message.replace(aiMentionPattern, '').trim();
         context.push({ role: 'user', text: cleanMessage });
 
-        // --- 5. 调用 AI API ---
+        // 5. 调用 AI
         const aiReply = await GoogleGenAI(context, aiRole);
         
-        // --- 6. 保存 AI 回复到数据库 ---
-        const aiMessageDoc = { 
-            room, // 确保使用了 room 字段
+        // 6. 保存 AI 回复
+        await ChatMessage.insertOne({ 
+            room, 
             sender: aiRole, 
             message: aiReply, 
             role: 'model', 
             timestamp: new Date() 
-        };
-        await ChatMessage.insertOne(aiMessageDoc);
+        });
 
         return res.status(200).json({ 
             success: true, 
@@ -96,7 +87,7 @@ export default async function handler(req, res) {
         console.error('Chat API Error:', error);
         return res.status(500).json({ 
             success: false, 
-            message: 'Internal server error during chat processing.', 
+            message: 'Internal server error.', 
             error: error.message 
         });
     }
