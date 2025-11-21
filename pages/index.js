@@ -47,10 +47,11 @@ const simpleStyles = {
         borderRadius: '8px',
         padding: '20px',
         height: '500px',
-        overflowY: 'scroll',
+        overflowY: 'scroll', // 允许滚动
         marginBottom: '15px',
         backgroundColor: '#f9f9f9',
         boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)',
+        scrollBehavior: 'auto', // 🚨 关键：禁用平滑滚动以防止跳动，由代码控制
     },
     chatHeader: {
         display: 'flex',
@@ -160,13 +161,10 @@ const simpleStyles = {
     },
 };
 
-// *** Markdown 样式优化 ***
 const markdownComponents = {
-    // 段落：增加 whiteSpace: 'pre-wrap' 以保留换行符，解决粘连问题
     p: ({node, ...props}) => <p style={{margin: '0 0 10px 0', lineHeight: '1.6', whiteSpace: 'pre-wrap'}} {...props} />,
     ul: ({node, ...props}) => <ul style={{paddingLeft: '20px', margin: '0 0 10px 0'}} {...props} />,
     ol: ({node, ...props}) => <ol style={{paddingLeft: '20px', margin: '0 0 10px 0'}} {...props} />,
-    // 列表项：增加间距
     li: ({node, ...props}) => <li style={{marginBottom: '6px', lineHeight: '1.5'}} {...props} />,
     h1: ({node, ...props}) => <h3 style={{margin: '16px 0 8px 0', fontWeight: 'bold', borderBottom: '1px solid #eee', paddingBottom: '5px'}} {...props} />,
     h2: ({node, ...props}) => <h4 style={{margin: '14px 0 8px 0', fontWeight: 'bold', color: '#0070f3'}} {...props} />,
@@ -188,18 +186,23 @@ export default function Home() {
     const [onlineMembers, setOnlineMembers] = useState([]); 
     const [showMemberSelect, setShowMemberSelect] = useState(false); 
     const [filteredMembers, setFilteredMembers] = useState([]); 
-    const lastMessageCountRef = useRef(0); 
     
     const aiRole = `**${AI_SENDER_NAME}**`; 
-    const chatEndRef = useRef(null);
+    
+    // 🚨 修改引用：直接引用 chatArea 容器，而不是底部的 div
+    const chatAreaRef = useRef(null); 
     const inputRef = useRef(null);
 
+    // 🚨 核心修复：滚动逻辑
     useEffect(() => {
-        if (chatHistory.length > lastMessageCountRef.current) {
-            chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-            lastMessageCountRef.current = chatHistory.length;
+        if (chatAreaRef.current) {
+            // 使用 setTimeout 确保在 DOM 渲染完成、内容高度撑开后才滚动
+            const timer = setTimeout(() => {
+                chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight;
+            }, 100);
+            return () => clearTimeout(timer);
         }
-    }, [chatHistory]);
+    }, [chatHistory]); // 只要历史记录变化，就尝试滚动
 
     const fetchOnlineMembers = async (currentRoom, currentSender) => {
         if (!currentRoom) {
@@ -490,7 +493,8 @@ export default function Home() {
 
                     {error && <div style={simpleStyles.errorBox}>{error}</div>}
 
-                    <div style={simpleStyles.chatArea}>
+                    {/* 🚨 绑定 ref 到这个 div，而不是内部的空 div */}
+                    <div style={simpleStyles.chatArea} ref={chatAreaRef}>
                         {chatHistory && chatHistory.map((msg, index) => ( 
                             <div key={index} style={{
                                 ...simpleStyles.messageContainer,
@@ -506,7 +510,6 @@ export default function Home() {
                                 </div>
                             </div>
                         ))}
-                        <div ref={chatEndRef} />
                     </div>
                     
                     <form onSubmit={sendMessage} style={simpleStyles.inputArea}>
