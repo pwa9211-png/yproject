@@ -2,6 +2,9 @@
 
 import { connectToMongo } from '../../lib/mongodb'; 
 
+const RESTRICTED_ROOM = '2';
+const ALLOWED_USERS = ['Didy', 'Shane']; 
+
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
         return res.status(405).json({ success: false, message: 'Method Not Allowed' });
@@ -14,16 +17,13 @@ export default async function handler(req, res) {
     }
 
     // --- 🚨 权限控制逻辑 START ---
-    const RESTRICTED_ROOM = '2';
-    const ALLOWED_USERS = ['Didy', 'Shane']; 
-
     if (room === RESTRICTED_ROOM) {
         if (!ALLOWED_USERS.includes(sender)) {
             // 立即拒绝非白名单用户获取历史记录
             return res.status(403).json({
                 success: false,
-                message: `房间 ${RESTRICTED_ROOM} 是限制房间。您无权查看历史对话。`,
-                history: [] // 返回空数组，不泄露任何数据
+                message: `对不起，房间 ${RESTRICTED_ROOM} 是限制房间。您无权查看历史对话。请换个房间。`,
+                history: [] 
             });
         }
     }

@@ -1,8 +1,10 @@
 // pages/api/chat.js
-// 请务必确保 lib/mongodb 和 lib/ai 文件存在
-// 🚨 修正导入路径：从 /pages/api 向上跳两级到项目根目录，然后进入 /lib/mongodb
+
 import { connectToMongo } from '../../lib/mongodb'; 
-import { GoogleGenAI } from '../../lib/ai';
+import { GoogleGenAI } from '../../lib/ai'; // 确保正确导入 AI 客户端
+
+const RESTRICTED_ROOM = '2';
+const ALLOWED_USERS = ['Didy', 'Shane']; 
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -19,10 +21,7 @@ export default async function handler(req, res) {
         });
     }
 
-    // --- 权限控制逻辑 START ---
-    const RESTRICTED_ROOM = '2';
-    const ALLOWED_USERS = ['Didy', 'Shane']; 
-
+    // --- 🚨 权限控制逻辑 START ---
     if (room === RESTRICTED_ROOM) {
         if (!ALLOWED_USERS.includes(sender)) {
             // 如果用户不在白名单内，拒绝操作
@@ -57,7 +56,7 @@ export default async function handler(req, res) {
         );
 
 
-        // 3. 检查是否需要 AI 回复 (用户是否 @AI)
+        // 3. 检查是否需要 AI 回复 
         const aiMentionPattern = new RegExp(`@${aiRole.replace(/\*\*/g, '')}`, 'i');
         const setRoleCommandPattern = new RegExp('/设定角色\\s*(.+)', 'i');
         const roleMatch = message.match(setRoleCommandPattern);

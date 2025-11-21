@@ -4,12 +4,16 @@ import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-// --- 权限常量定义 ---
+// --- 权限常量定义 (保持一致) ---
 const RESTRICTED_ROOM = '2';
 const ALLOWED_USERS = ['Didy', 'Shane']; 
+const AI_SENDER_NAME = '万能助理';
 // -------------------
 
+// ... (此处省略简单的 simpleStyles 和 markdownComponents 定义，请确保它们在您的文件中存在)
+
 const simpleStyles = {
+    // ... (请复制您原有的 simpleStyles 整个对象)
     container: {
         minHeight: '100vh',
         padding: '0 0.5rem',
@@ -149,7 +153,6 @@ const simpleStyles = {
 };
 
 const markdownComponents = {
-    // 强制保留换行符，解决粘连问题
     p: ({node, ...props}) => <p style={{margin: '0 0 10px 0', lineHeight: '1.6', whiteSpace: 'pre-wrap'}} {...props} />,
     ul: ({node, ...props}) => <ul style={{paddingLeft: '20px', margin: '0 0 10px 0'}} {...props} />,
     ol: ({node, ...props}) => <ol style={{paddingLeft: '20px', margin: '0 0 10px 0'}} {...props} />,
@@ -160,8 +163,6 @@ const markdownComponents = {
     strong: ({node, ...props}) => <strong style={{fontWeight: '600', color: '#d32f2f'}} {...props} />,
     a: ({node, ...props}) => <a style={{color: '#0070f3', textDecoration: 'underline'}} {...props} />,
 };
-
-const AI_SENDER_NAME = '万能助理';
 
 export default function Home() {
     const [room, setRoom] = useState('');
@@ -177,11 +178,9 @@ export default function Home() {
     
     const aiRole = `**${AI_SENDER_NAME}**`; 
     
-    // 绑定到 chatArea 容器
     const chatAreaRef = useRef(null); 
     const inputRef = useRef(null);
 
-    // 核心修复：滚动逻辑
     useEffect(() => {
         if (chatAreaRef.current) {
             const timer = setTimeout(() => {
@@ -191,7 +190,7 @@ export default function Home() {
         }
     }, [chatHistory]);
 
-    // 🚨 修正 fetchOnlineMembers: 增加 sender 参数
+    // 传入 sender 参数
     const fetchOnlineMembers = async (currentRoom, currentSender) => {
         if (!currentRoom) {
             setOnlineMembers([currentSender, AI_SENDER_NAME]);
@@ -199,15 +198,12 @@ export default function Home() {
         }
         let membersFromApi = [];
         try {
-            // 在请求中包含 sender，以便后端进行权限检查
             const res = await fetch(`/api/online-status?room=${currentRoom}&sender=${currentSender}`); 
             const data = await res.json();
             if (res.ok && data.members && Array.isArray(data.members)) {
                 membersFromApi = data.members.map(m => m.sender);
             } else if (res.status === 403) {
-                // 如果后端返回 403，则仅显示自己和 AI，并给出提示
                 console.warn(`房间 ${currentRoom} 在线成员获取失败 (403 Forbidden)。`);
-                // 仅显示警告，不覆盖主要错误信息
             }
         } catch (err) {
             console.error("Failed to fetch online members:", err);
@@ -222,22 +218,19 @@ export default function Home() {
         setOnlineMembers(finalMembers);
     };
 
-    // 🚨 修正 fetchHistory: 增加 sender 参数
+    // 传入 sender 参数
     const fetchHistory = async (currentRoom, currentSender) => {
         if (!currentRoom) return;
         try {
-            // 在请求中包含 sender，以便后端进行权限检查
             const res = await fetch(`/api/history?room=${currentRoom}&sender=${currentSender}`); 
             const data = await res.json();
             if (res.ok) {
                 if (data.history) {
                     setChatHistory(data.history); 
                 }
-                // 不清除外部error
             } else if (res.status === 403) {
-                 // 如果后端返回 403，则清空历史并给出错误提示
                  setChatHistory([]);
-                 setError(data.message);
+                 setError(data.message); // 显示后端的权限错误信息
             } else {
                 console.error(`Fetch history failed: ${data.message}`);
             }
@@ -248,13 +241,12 @@ export default function Home() {
 
     useEffect(() => {
         if (!isLoggedIn) return;
-        // 传入 sender 参数
         fetchOnlineMembers(room, sender); 
         fetchHistory(room, sender); 
         const interval = setInterval(() => {
-            // 传入 sender 参数
             fetchOnlineMembers(room, sender); 
             fetchHistory(room, sender); 
+            // 心跳保持在线
             fetch('/api/heartbeat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -277,7 +269,6 @@ export default function Home() {
             // --- 前端权限检查 END ---
 
             setIsLoggedIn(true);
-            // 在登录时调用 history 需要传入 sender
             fetchHistory(room, sender); 
             setError(`系统提示: 欢迎 ${sender} 加入房间 ${room}。AI 角色: ${aiRole}`);
         } else {
@@ -286,19 +277,101 @@ export default function Home() {
     };
 
     const clearHistory = async () => {
-        // ... (保持不变)
+        if (!confirm("确定要清空当前房间的所有对话历史吗？此操作不可逆！")) return;
+
+        try {
+            const res = await fetch('/api/clear-history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                // 仅发送 room，后端 API 会处理
+                body: JSON.stringify({ room }), 
+            });
+
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                setChatHistory([]);
+                setError(data.message);
+            } else if (res.status === 403) {
+                 setError(`清空失败: 权限不足。`);
+            } else {
+                setError(`清空失败，请重试。原因: ${data.message || '未知错误'}`);
+            }
+        } catch (err) {
+            setError(`清空失败：网络连接错误或服务器无响应。`);
+        }
     };
 
     const handleExportChat = () => {
-        // ... (保持不变)
+        // ... (此处功能代码保持不变)
+        const htmlContent = chatHistory.map(msg => {
+            const senderName = msg.sender.replace(/\*\*/g, ''); 
+            const isAI = senderName === AI_SENDER_NAME;
+            const roleClass = isAI ? 'message-ai' : 'message-user';
+            const style = isAI ? 'background-color: #f0f0f0; padding: 10px; border-radius: 8px; margin-bottom: 10px;' : 'background-color: #0070f3; color: white; padding: 10px; border-radius: 8px; margin-bottom: 10px; text-align: right;';
+            const content = msg.message.replace(/[\u00A0-\u9999<>&]/gim, (i) => `&#${i.charCodeAt(0)};`);
+
+            if (isAI) {
+                return `<div style="${style}"><strong>${senderName}:</strong><p>${content}</p></div>`;
+            } else {
+                return `<div style="${style}"><strong>${senderName}:</strong><p>${content}</p></div>`;
+            }
+        }).join('\n');
+
+        const fullHtml = `
+            <!DOCTYPE html>
+            <html lang="zh-CN">
+            <head>
+                <meta charset="UTF-8">
+                <title>聊天记录 - 房间 ${room}</title>
+                <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 20px; max-width: 800px; margin-left: auto; margin-right: auto; line-height: 1.6; }
+                    .message-ai { background-color: #f0f0f0; padding: 10px; border-radius: 8px; margin-bottom: 10px; clear: both; overflow: auto; }
+                    .message-user { background-color: #0070f3; color: white; padding: 10px; border-radius: 8px; margin-bottom: 10px; text-align: right; clear: both; overflow: auto; }
+                    strong { display: block; margin-bottom: 5px; font-weight: bold; }
+                    p { margin: 0; white-space: pre-wrap; }
+                </style>
+            </head>
+            <body>
+                <h1>房间 ${room} 聊天记录</h1>
+                <p>导出用户: ${sender}</p>
+                <hr>
+                ${htmlContent}
+            </body>
+            </html>
+        `;
+
+        const blob = new Blob([fullHtml], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chat_room_${room}_${new Date().toISOString().slice(0, 10)}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     };
 
     const handleInputChange = (e) => {
-        // ... (保持不变)
+        const value = e.target.value;
+        setMessage(value);
+        
+        if (value.endsWith('@')) {
+            const query = value.slice(0, -1).trim().split(/\s+/).pop();
+            const members = onlineMembers.filter(m => m.toLowerCase().startsWith(query.toLowerCase()));
+            setFilteredMembers(members.filter(m => m !== sender)); 
+            setShowMemberSelect(true);
+        } else {
+            setShowMemberSelect(false);
+            setFilteredMembers([]);
+        }
     };
     
     const selectMember = (member) => {
-        // ... (保持不变)
+        const currentText = message.slice(0, -1).trim(); 
+        setMessage(currentText + ' @' + member + ' ');
+        setShowMemberSelect(false);
+        inputRef.current.focus(); 
     };
 
     const sendMessage = async (e) => {
@@ -324,14 +397,14 @@ export default function Home() {
                 if (data.ai_reply && data.ai_reply !== 'AI 未被 @，不回复。') {
                     const aiMessage = { 
                         room, 
-                        sender: aiRole, 
+                        sender: AI_SENDER_NAME, 
                         message: data.ai_reply, 
                         role: 'model', 
                         timestamp: new Date() 
                     };
                     setChatHistory(prev => [...prev, aiMessage]);
                 }
-                fetchHistory(room, sender); // 🚨 确保这里也传入 sender
+                fetchHistory(room, sender); 
                 setError(null);
             } else {
                 setChatHistory(prev => prev.filter(msg => msg !== userMessage));
@@ -369,7 +442,7 @@ export default function Home() {
                         />
                         <input
                             type="text"
-                            placeholder="输入您的称呼 (例如: Bear)" // 称呼示例已修正
+                            placeholder="输入您的称呼 (例如: Bear)" 
                             value={sender}
                             onChange={(e) => setSender(e.target.value)}
                             required
