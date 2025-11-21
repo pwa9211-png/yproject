@@ -10,7 +10,6 @@ const ALLOWED_USERS = ['Didy', 'Shane'];
 // -------------------
 
 const simpleStyles = {
-    // ... (所有样式代码保持不变，为节省篇幅在此省略)
     container: {
         minHeight: '100vh',
         padding: '0 0.5rem',
@@ -29,7 +28,6 @@ const simpleStyles = {
         textAlign: 'center',
         marginBottom: '25px',
     },
-    // ... (其余 simpleStyles 保持不变)
     chatArea: {
         width: '100%',
         border: '1px solid #ccc',
@@ -42,7 +40,40 @@ const simpleStyles = {
         boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)',
         scrollBehavior: 'auto',
     },
-    // ...
+    chatHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '15px',
+        paddingBottom: '10px',
+        borderBottom: '1px solid #ddd',
+        width: '100%',
+        fontSize: '1rem',
+    },
+    messageContainer: {
+        marginBottom: '15px',
+        padding: '12px 16px',
+        borderRadius: '12px',
+        clear: 'both',
+        overflow: 'hidden',
+        maxWidth: '85%', 
+        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+    },
+    userMessage: {
+        float: 'right',
+        backgroundColor: '#0070f3',
+        color: 'white',
+        marginLeft: 'auto',
+        borderBottomRightRadius: '2px',
+    },
+    modelMessage: {
+        float: 'left',
+        backgroundColor: 'white', 
+        color: '#333',
+        marginRight: 'auto',
+        border: '1px solid #e0e0e0',
+        borderBottomLeftRadius: '2px',
+    },
     inputArea: {
         display: 'flex',
         width: '100%',
@@ -88,11 +119,46 @@ const simpleStyles = {
         backgroundColor: '#fefefe',
         boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
     },
-    // ... (其余 simpleStyles 保持不变)
+    memberListContainer: {
+        width: '220px',
+        border: '1px solid #ddd',
+        padding: '15px',
+        borderRadius: '8px',
+        backgroundColor: '#fff',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+        marginTop: '105px', 
+    },
+    memberSelectMenu: {
+        position: 'absolute',
+        bottom: '55px', 
+        left: '0',
+        width: '200px',
+        maxHeight: '200px',
+        overflowY: 'auto',
+        backgroundColor: '#fff',
+        border: '1px solid #ccc',
+        borderRadius: '4px',
+        zIndex: 100,
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    },
+    memberSelectItem: {
+        padding: '10px',
+        cursor: 'pointer',
+        borderBottom: '1px solid #f0f0f0',
+    },
 };
 
 const markdownComponents = {
-    // ... (markdownComponents 保持不变)
+    // 强制保留换行符，解决粘连问题
+    p: ({node, ...props}) => <p style={{margin: '0 0 10px 0', lineHeight: '1.6', whiteSpace: 'pre-wrap'}} {...props} />,
+    ul: ({node, ...props}) => <ul style={{paddingLeft: '20px', margin: '0 0 10px 0'}} {...props} />,
+    ol: ({node, ...props}) => <ol style={{paddingLeft: '20px', margin: '0 0 10px 0'}} {...props} />,
+    li: ({node, ...props}) => <li style={{marginBottom: '6px', lineHeight: '1.5'}} {...props} />,
+    h1: ({node, ...props}) => <h3 style={{margin: '16px 0 8px 0', fontWeight: 'bold', borderBottom: '1px solid #eee', paddingBottom: '5px'}} {...props} />,
+    h2: ({node, ...props}) => <h4 style={{margin: '14px 0 8px 0', fontWeight: 'bold', color: '#0070f3'}} {...props} />,
+    h3: ({node, ...props}) => <strong style={{display: 'block', margin: '12px 0 4px 0', fontSize: '1.05em'}} {...props} />,
+    strong: ({node, ...props}) => <strong style={{fontWeight: '600', color: '#d32f2f'}} {...props} />,
+    a: ({node, ...props}) => <a style={{color: '#0070f3', textDecoration: 'underline'}} {...props} />,
 };
 
 const AI_SENDER_NAME = '万能助理';
@@ -111,9 +177,11 @@ export default function Home() {
     
     const aiRole = `**${AI_SENDER_NAME}**`; 
     
+    // 绑定到 chatArea 容器
     const chatAreaRef = useRef(null); 
     const inputRef = useRef(null);
 
+    // 核心修复：滚动逻辑
     useEffect(() => {
         if (chatAreaRef.current) {
             const timer = setTimeout(() => {
@@ -139,7 +207,7 @@ export default function Home() {
             } else if (res.status === 403) {
                 // 如果后端返回 403，则仅显示自己和 AI，并给出提示
                 console.warn(`房间 ${currentRoom} 在线成员获取失败 (403 Forbidden)。`);
-                setError(`系统提示: 房间 ${currentRoom} 是限制房间，您无权获取在线成员列表。`);
+                // 仅显示警告，不覆盖主要错误信息
             }
         } catch (err) {
             console.error("Failed to fetch online members:", err);
@@ -165,7 +233,7 @@ export default function Home() {
                 if (data.history) {
                     setChatHistory(data.history); 
                 }
-                setError(null);
+                // 不清除外部error
             } else if (res.status === 403) {
                  // 如果后端返回 403，则清空历史并给出错误提示
                  setChatHistory([]);
@@ -180,11 +248,11 @@ export default function Home() {
 
     useEffect(() => {
         if (!isLoggedIn) return;
-        // 🚨 传入 sender 参数
+        // 传入 sender 参数
         fetchOnlineMembers(room, sender); 
         fetchHistory(room, sender); 
         const interval = setInterval(() => {
-            // 🚨 传入 sender 参数
+            // 传入 sender 参数
             fetchOnlineMembers(room, sender); 
             fetchHistory(room, sender); 
             fetch('/api/heartbeat', {
@@ -196,19 +264,20 @@ export default function Home() {
         return () => clearInterval(interval);
     }, [isLoggedIn, room, sender]); 
 
-    // 🚨 修正 handleLogin: 添加前端权限检查
+    // 🚨 修正 handleLogin: 添加前端权限检查和模糊错误信息
     const handleLogin = (e) => {
         e.preventDefault();
         if (room && sender) {
             // --- 前端权限检查 START ---
             if (room === RESTRICTED_ROOM && !ALLOWED_USERS.includes(sender)) {
-                setError(`对不起，房间 ${RESTRICTED_ROOM} 是限制房间。只有 ${ALLOWED_USERS.join(' 和 ')} 可以进入。`);
+                // 🚨 使用模糊的拒绝信息
+                setError('对不起，当前房间可能已满，或您的身份不被允许。请换一个房间号试试。');
                 return; // 阻止登录
             }
             // --- 前端权限检查 END ---
 
             setIsLoggedIn(true);
-            // 🚨 在登录时调用 history 需要传入 sender
+            // 在登录时调用 history 需要传入 sender
             fetchHistory(room, sender); 
             setError(`系统提示: 欢迎 ${sender} 加入房间 ${room}。AI 角色: ${aiRole}`);
         } else {
@@ -216,7 +285,6 @@ export default function Home() {
         }
     };
 
-    // ... (其余函数 clearHistory, handleExportChat, handleInputChange, selectMember, sendMessage 保持不变)
     const clearHistory = async () => {
         // ... (保持不变)
     };
@@ -234,7 +302,47 @@ export default function Home() {
     };
 
     const sendMessage = async (e) => {
-        // ... (保持不变)
+        e.preventDefault();
+        if (!message.trim() || !isLoggedIn || isSending) return;
+        const userMessage = { room, sender, message: message.trim(), role: 'user', timestamp: new Date() };
+        setChatHistory(prev => [...prev, userMessage]);
+        setMessage('');
+        setIsSending(true);
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    room,
+                    sender,
+                    message: userMessage.message,
+                    aiRole: AI_SENDER_NAME,
+                }),
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                if (data.ai_reply && data.ai_reply !== 'AI 未被 @，不回复。') {
+                    const aiMessage = { 
+                        room, 
+                        sender: aiRole, 
+                        message: data.ai_reply, 
+                        role: 'model', 
+                        timestamp: new Date() 
+                    };
+                    setChatHistory(prev => [...prev, aiMessage]);
+                }
+                fetchHistory(room, sender); // 🚨 确保这里也传入 sender
+                setError(null);
+            } else {
+                setChatHistory(prev => prev.filter(msg => msg !== userMessage));
+                setError(`发送失败，请重试。原因: ${data.message || 'API 请求失败: 服务器处理错误'}`);
+            }
+        } catch (err) {
+            setChatHistory(prev => prev.filter(msg => msg !== userMessage));
+            setError(`发送失败，请重试。原因: 网络连接错误或服务器无响应。`);
+        } finally {
+            setIsSending(false);
+        }
     };
 
     if (!isLoggedIn) {
@@ -261,7 +369,7 @@ export default function Home() {
                         />
                         <input
                             type="text"
-                            placeholder="输入您的称呼 (例如: Bear)" 
+                            placeholder="输入您的称呼 (例如: Bear)" // 称呼示例已修正
                             value={sender}
                             onChange={(e) => setSender(e.target.value)}
                             required
@@ -277,33 +385,28 @@ export default function Home() {
     }
 
     return (
-        // ... (其余聊天界面渲染代码保持不变)
         <div style={simpleStyles.container}>
             <Head>
                 <title>多人 AI 智能聊天室</title>
             </Head>
-
-            {/* 🚨 应用响应式类名 */}
             <div className="main-layout" style={{ 
                 padding: '2rem 0', 
                 flex: 1, 
                 display: 'flex', 
-                flexDirection: 'row', // 默认是 row
+                flexDirection: 'row', 
                 alignItems: 'flex-start',
                 width: '100%',
                 maxWidth: '1200px', 
                 position: 'relative', 
             }}>
-                {/* 🚨 应用响应式类名 */}
                 <div className="chat-container" style={{ 
                     flex: 1, 
-                    marginRight: '30px', // 默认右侧间距
+                    marginRight: '30px', 
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     maxWidth: '900px',
                 }}>
-                    {/* 🚨 应用响应式类名 */}
                     <h1 style={simpleStyles.title} className="chat-title">
                         <span role="img" aria-label="robot">🤖</span>
                         <span role="img" aria-label="person">🧑‍💻</span> 
@@ -320,14 +423,13 @@ export default function Home() {
 
                     {error && <div style={simpleStyles.errorBox}>{error}</div>}
 
-                    {/* 🚨 应用 ref 和响应式类名 */}
                     <div style={simpleStyles.chatArea} ref={chatAreaRef} className="chat-area">
                         {chatHistory && chatHistory.map((msg, index) => ( 
                             <div key={index} style={{
                                 ...simpleStyles.messageContainer,
                                 ...(msg.role === 'user' ? simpleStyles.userMessage : simpleStyles.modelMessage),
                             }}
-                            className="message-container" // 🚨 应用响应式类名
+                            className="message-container" 
                             >
                                 <strong>{msg.sender}:</strong>
                                 <div style={{ wordWrap: 'break-word', marginTop: '5px' }}>
@@ -341,11 +443,9 @@ export default function Home() {
                         ))}
                     </div>
                     
-                    {/* 🚨 应用响应式类名 */}
                     <form onSubmit={sendMessage} style={simpleStyles.inputArea} className="input-area">
                         {showMemberSelect && filteredMembers.length > 0 && (
-                           // ... (memberSelectMenu 保持不变)
-                           <div style={simpleStyles.memberSelectMenu}>
+                            <div style={simpleStyles.memberSelectMenu}>
                                 {filteredMembers.map((member, index) => (
                                     <div 
                                         key={index} 
@@ -381,7 +481,6 @@ export default function Home() {
                     </p>
                 </div>
 
-                {/* 🚨 应用响应式类名 */}
                 <div style={simpleStyles.memberListContainer} className="member-list-container">
                     <strong>在线成员</strong>
                     <hr/>

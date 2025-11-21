@@ -7,7 +7,7 @@ export default async function handler(req, res) {
         return res.status(405).json({ success: false, message: 'Method Not Allowed' });
     }
 
-    const { room, sender } = req.query; // 必须从前端接收 sender
+    const { room, sender } = req.query; // 从前端接收 room 和 sender
 
     if (!room || !sender) {
         return res.status(400).json({ success: false, message: 'Missing required fields: room or sender.' });
@@ -32,7 +32,6 @@ export default async function handler(req, res) {
     try {
         const { ChatMessage } = await connectToMongo();
 
-        // 获取房间的所有历史记录 (按时间升序)
         const history = await ChatMessage.find({ room })
             .sort({ timestamp: 1 })
             .toArray();

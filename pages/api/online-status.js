@@ -1,33 +1,47 @@
 // pages/api/online-status.js
-import { connectToMongo } from '../../lib/mongodb'; // 确保路径正确
+
+import { connectToMongo } from '../../lib/mongodb'; 
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
-        return res.status(405).json({ message: 'Method Not Allowed' });
+        return res.status(405).json({ success: false, message: 'Method Not Allowed' });
     }
 
-    const { room } = req.query;
+    const { room, sender } = req.query; // 从前端接收 room 和 sender
 
-    if (!room) {
-        return res.status(400).json({ message: 'Missing room parameter' });
+    if (!room || !sender) {
+        return res.status(400).json({ success: false, message: 'Missing required fields: room or sender.' });
     }
+
+    // --- 🚨 权限控制逻辑 START ---
+    const RESTRICTED_ROOM = '2';
+    const ALLOWED_USERS = ['Didy', 'Shane']; 
+
+    if (room === RESTRICTED_ROOM) {
+        if (!ALLOWED_USERS.includes(sender)) {
+            // 立即拒绝非白名单用户查看在线列表
+            return res.status(403).json({
+                success: false,
+                message: `房间 ${RESTRICTED_ROOM} 是限制房间。您无权查看在线成员。`,
+                members: [] 
+            });
+        }
+    }
+    // --- 权限控制逻辑 END ---
 
     try {
         const { OnlineUser } = await connectToMongo();
 
-        // 计算 "在线" 的阈值 (例如过去 60 秒内有心跳的用户)
-        const threshold = new Date(Date.now() - 60 * 1000);
+        // 查找该房间的所有在线用户
+        const members = await OnlineUser.find({ room }).toArray();
 
-        // 查询该房间内，且 last_seen 大于阈值的用户
-        const members = await OnlineUser.find({ 
-            room: room,
-            last_seen: { $gt: threshold }
-        }).toArray();
+        // 假设 OnlineUser 文档结构为 { room, sender, last_seen }
+        const memberList = members.map(m => ({ sender: m.sender }));
 
-        res.status(200).json({ members });
+        return res.status(200).json({ success: true, members: memberList });
 
     } catch (error) {
         console.error('Online Status API Error:', error);
-        res.status(500).json({ message: 'Internal Server Error', details: error.message });
+        return res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 }
