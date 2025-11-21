@@ -169,14 +169,12 @@ export default function Home() {
     const [onlineMembers, setOnlineMembers] = useState([]); 
     const [showMemberSelect, setShowMemberSelect] = useState(false); 
     const [filteredMembers, setFilteredMembers] = useState([]); 
-    const lastMessageCountRef = useRef(0); // 用于追踪消息数量变化，避免不必要的滚动
+    const lastMessageCountRef = useRef(0); 
     
-    // AI 角色设定为新的通用名称
     const aiRole = `**${AI_SENDER_NAME}**`; 
     const chatEndRef = useRef(null);
     const inputRef = useRef(null);
 
-    // 仅当消息数量增加时才滚动到底部
     useEffect(() => {
         if (chatHistory.length > lastMessageCountRef.current) {
             chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -223,15 +221,11 @@ export default function Home() {
             const res = await fetch(`/api/history?room=${currentRoom}`);
             const data = await res.json();
             if (res.ok) {
-                // 如果后端返回数据，更新聊天记录
                 if (data.history) {
-                    // 这里可以做一个简单的优化：只有当数据真正变化时才更新 state
-                    // 但为了简单起见，我们直接设置，React 会处理 diff
                     setChatHistory(data.history); 
                 }
                 setError(null);
             } else {
-                // 轮询错误通常不弹窗，以免打扰用户，只在控制台记录
                 console.error(`Fetch history failed: ${data.message}`);
             }
         } catch (err) {
@@ -239,7 +233,7 @@ export default function Home() {
         }
     };
 
-    // 🚨 核心修复：设置心跳、在线状态轮询 AND 聊天记录轮询
+    // 核心：设置心跳、在线状态轮询 AND 聊天记录轮询
     useEffect(() => {
         if (!isLoggedIn) return;
 
@@ -247,13 +241,11 @@ export default function Home() {
         fetchOnlineMembers(room, sender);
         fetchHistory(room);
 
-        // 2. 设置定时器
-        // 轮询间隔设置为 3 秒，以获得接近实时的体验
+        // 2. 设置定时器 (每3秒轮询一次)
         const interval = setInterval(() => {
             fetchOnlineMembers(room, sender);
             fetchHistory(room); 
             
-            // 发送心跳 (可选，如果后端没有自动更新)
             fetch('/api/heartbeat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -266,4 +258,272 @@ export default function Home() {
     }, [isLoggedIn, room, sender]); 
 
     // 登录/加入房间逻辑
-    const handleLogin = (
+    const handleLogin = (e) => {
+        e.preventDefault();
+        if (room && sender) {
+            setIsLoggedIn(true);
+            fetchHistory(room); 
+            setError(`系统提示: 欢迎 ${sender} 加入房间 ${room}。AI 角色: ${aiRole}`);
+        } else {
+            setError('请输入房间号和您的称呼！');
+        }
+    };
+
+    // 清空历史逻辑
+    const clearHistory = async () => {
+        if (!room) return;
+        if (!window.confirm("确定要清空当前房间的所有聊天历史吗？")) return;
+
+        try {
+            const res = await fetch('/api/clear-history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ room }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setChatHistory([]);
+                setError(`系统提示: 房间 ${room} 聊天历史已清空。`);
+            } else {
+                setError(`清空历史失败: ${data.message}`);
+            }
+        } catch (err) {
+            setError(`清空历史失败: ${err.message}`);
+        }
+    };
+
+
+    // 处理输入变化和 @ 菜单
+    const handleInputChange = (e) => {
+        const value = e.target.value;
+        setMessage(value);
+
+        let lastAtIndex = -1;
+        for (let i = value.length - 1; i >= 0; i--) {
+            if (value[i] === '@') {
+                lastAtIndex = i;
+                break;
+            }
+            if (value[i] === ' ') {
+                lastAtIndex = -1; 
+                break;
+            }
+        }
+        
+        if (lastAtIndex !== -1 && lastAtIndex === value.length - 1) {
+            const list = onlineMembers.filter(m => m !== sender);
+            setFilteredMembers(list);
+            setShowMemberSelect(true);
+        } else if (lastAtIndex !== -1 && lastAtIndex < value.length - 1) {
+            const query = value.substring(lastAtIndex + 1).toLowerCase();
+            const list = onlineMembers.filter(m => m !== sender && m.toLowerCase().includes(query));
+            setFilteredMembers(list);
+            setShowMemberSelect(true);
+        } else {
+            setShowMemberSelect(false);
+            setFilteredMembers([]);
+        }
+    };
+    
+    // 选择成员
+    const selectMember = (member) => {
+        const lastAtIndex = message.lastIndexOf('@');
+        const newMessage = message.substring(0, lastAtIndex) + `@${member} `;
+        setMessage(newMessage);
+        setShowMemberSelect(false);
+        inputRef.current.focus();
+    };
+
+    // 发送消息逻辑
+    const sendMessage = async (e) => {
+        e.preventDefault();
+        if (!message.trim() || !isLoggedIn || isSending) return;
+
+        const userMessage = { room, sender, message: message.trim(), role: 'user', timestamp: new Date() };
+        
+        setChatHistory(prev => [...prev, userMessage]);
+        setMessage('');
+        setIsSending(true);
+
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    room,
+                    sender,
+                    message: userMessage.message,
+                    aiRole: AI_SENDER_NAME,
+                }),
+            });
+
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                if (data.ai_reply && data.ai_reply !== 'AI 未被 @，不回复。') {
+                    const aiMessage = { 
+                        room, 
+                        sender: aiRole, 
+                        message: data.ai_reply, 
+                        role: 'model', 
+                        timestamp: new Date() 
+                    };
+                    setChatHistory(prev => [...prev, aiMessage]);
+                }
+                fetchHistory(room);
+                setError(null);
+            } else {
+                setChatHistory(prev => prev.filter(msg => msg !== userMessage));
+                setError(`发送失败，请重试。原因: ${data.message || 'API 请求失败: 服务器处理错误'}`);
+            }
+
+        } catch (err) {
+            setChatHistory(prev => prev.filter(msg => msg !== userMessage));
+            setError(`发送失败，请重试。原因: 网络连接错误或服务器无响应。`);
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+
+    // 登录界面
+    if (!isLoggedIn) {
+        return (
+            <div style={simpleStyles.container}>
+                <Head>
+                    <title>多人 AI 智能聊天室 - 登录</title>
+                </Head>
+                <main style={simpleStyles.chatContainer}>
+                    <h1 style={simpleStyles.title}>
+                        <span role="img" aria-label="robot">🤖</span>
+                        <span role="img" aria-label="person">🧑‍💻</span> 
+                        多人 AI 智能聊天室
+                    </h1>
+                    {error && <div style={simpleStyles.errorBox}>{error}</div>}
+                    <form onSubmit={handleLogin} style={simpleStyles.loginForm}>
+                        <input
+                            type="text"
+                            placeholder="输入房间号 (例如: 123)"
+                            value={room}
+                            onChange={(e) => setRoom(e.target.value)}
+                            required
+                            style={simpleStyles.textInput}
+                        />
+                        <input
+                            type="text"
+                            placeholder="输入您的称呼 (例如: shane)"
+                            value={sender}
+                            onChange={(e) => setSender(e.target.value)}
+                            required
+                            style={simpleStyles.textInput}
+                        />
+                        <button type="submit" style={simpleStyles.sendButton}>
+                            加入聊天
+                        </button>
+                    </form>
+                </main>
+            </div>
+        );
+    }
+
+    // 主聊天界面
+    return (
+        <div style={simpleStyles.container}>
+            <Head>
+                <title>多人 AI 智能聊天室</title>
+            </Head>
+
+            <div style={simpleStyles.main}>
+                
+                {/* 左侧主要聊天区域 */}
+                <div style={simpleStyles.chatContainer}>
+                    
+                    <h1 style={simpleStyles.title}>
+                        <span role="img" aria-label="robot">🤖</span>
+                        <span role="img" aria-label="person">🧑‍💻</span> 
+                        多人 AI 智能聊天室
+                    </h1>
+
+                    <div style={simpleStyles.chatHeader}>
+                        <span>当前房间: **{room}** | AI 角色: {aiRole} ({sender})</span>
+                        <div>
+                            <button onClick={() => alert("导出对话功能待实现")} style={{ ...simpleStyles.sendButton, backgroundColor: '#6c757d', marginRight: '10px' }}>导出对话 (HTML)</button>
+                            <button onClick={clearHistory} style={{ ...simpleStyles.sendButton, backgroundColor: '#dc3545' }}>清空对话</button>
+                        </div>
+                    </div>
+
+                    {error && <div style={simpleStyles.errorBox}>{error}</div>}
+
+                    <div style={simpleStyles.chatArea}>
+                        {chatHistory && chatHistory.map((msg, index) => ( 
+                            <div key={index} style={{
+                                ...simpleStyles.messageContainer,
+                                ...(msg.role === 'user' ? simpleStyles.userMessage : simpleStyles.modelMessage),
+                            }}>
+                                <strong>{msg.sender}:</strong>
+                                <div style={{ wordWrap: 'break-word', marginTop: '5px' }}>
+                                    <ReactMarkdown children={msg.message} remarkPlugins={[remarkGfm]} />
+                                </div>
+                            </div>
+                        ))}
+                        <div ref={chatEndRef} />
+                    </div>
+                    
+                    <form onSubmit={sendMessage} style={simpleStyles.inputArea}>
+                        
+                        {/* 成员选择菜单 */}
+                        {showMemberSelect && filteredMembers.length > 0 && (
+                            <div style={simpleStyles.memberSelectMenu}>
+                                {filteredMembers.map((member, index) => (
+                                    <div 
+                                        key={index} 
+                                        style={simpleStyles.memberSelectItem}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = simpleStyles.memberSelectItemHover.backgroundColor}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                                        onClick={() => selectMember(member)}
+                                    >
+                                        {member} {member === AI_SENDER_NAME && '(AI)'}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            placeholder={`输入您的信息... (输入@ 可选择成员)`}
+                            value={message}
+                            onChange={handleInputChange} 
+                            disabled={isSending}
+                            style={simpleStyles.textInput}
+                        />
+                        <button type="submit" disabled={isSending} style={simpleStyles.sendButton}>
+                            {isSending ? '发送中...' : '发送'}
+                        </button>
+                    </form>
+
+                    <p style={{ marginTop: '10px', fontSize: '0.8rem', color: '#666' }}>
+                        * AI 仅在被 @ 时回复 (例如: @{AI_SENDER_NAME} 你好)
+                        <br/>
+                        * 使用 `/设定角色 [新角色描述]` 命令可以动态切换 AI 身份。
+                    </p>
+                </div>
+
+                {/* 右侧在线成员列表 */}
+                <div style={simpleStyles.memberListContainer}>
+                    <strong>在线成员</strong>
+                    <hr/>
+                    {onlineMembers.length > 0 ? (
+                        onlineMembers.map((member, index) => (
+                            <div key={index} style={{ marginBottom: '5px', color: member === sender ? '#0070f3' : '#333' }}>
+                                {member} {member === sender ? '(你)' : member === AI_SENDER_NAME ? '(AI)' : ''}
+                            </div>
+                        ))
+                    ) : (
+                        <div style={{ color: '#aaa', fontSize: '0.9rem' }}>正在加载或无其他成员...</div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
