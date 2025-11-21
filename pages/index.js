@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-// 定义页面布局样式
 const simpleStyles = {
     container: {
         minHeight: '100vh',
@@ -47,7 +46,7 @@ const simpleStyles = {
         border: '1px solid #ccc',
         borderRadius: '8px',
         padding: '20px',
-        height: '500px', // 稍微增高一点
+        height: '500px',
         overflowY: 'scroll',
         marginBottom: '15px',
         backgroundColor: '#f9f9f9',
@@ -69,7 +68,7 @@ const simpleStyles = {
         borderRadius: '12px',
         clear: 'both',
         overflow: 'hidden',
-        maxWidth: '80%', // 限制消息宽度，更像气泡
+        maxWidth: '85%', 
         boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
     },
     userMessage: {
@@ -81,7 +80,7 @@ const simpleStyles = {
     },
     modelMessage: {
         float: 'left',
-        backgroundColor: 'white', // AI 消息用白色背景
+        backgroundColor: 'white', 
         color: '#333',
         marginRight: 'auto',
         border: '1px solid #e0e0e0',
@@ -161,25 +160,19 @@ const simpleStyles = {
     },
 };
 
-// *** 新增：Markdown 渲染样式的自定义组件 ***
-// 这会让 AI 的回复（列表、标题等）看起来更整齐
+// *** Markdown 样式优化 ***
 const markdownComponents = {
-    // 段落
-    p: ({node, ...props}) => <p style={{margin: '0 0 8px 0', lineHeight: '1.6'}} {...props} />,
-    // 列表
+    // 段落：增加 whiteSpace: 'pre-wrap' 以保留换行符，解决粘连问题
+    p: ({node, ...props}) => <p style={{margin: '0 0 10px 0', lineHeight: '1.6', whiteSpace: 'pre-wrap'}} {...props} />,
     ul: ({node, ...props}) => <ul style={{paddingLeft: '20px', margin: '0 0 10px 0'}} {...props} />,
     ol: ({node, ...props}) => <ol style={{paddingLeft: '20px', margin: '0 0 10px 0'}} {...props} />,
-    li: ({node, ...props}) => <li style={{marginBottom: '4px', lineHeight: '1.5'}} {...props} />,
-    // 标题
+    // 列表项：增加间距
+    li: ({node, ...props}) => <li style={{marginBottom: '6px', lineHeight: '1.5'}} {...props} />,
     h1: ({node, ...props}) => <h3 style={{margin: '16px 0 8px 0', fontWeight: 'bold', borderBottom: '1px solid #eee', paddingBottom: '5px'}} {...props} />,
     h2: ({node, ...props}) => <h4 style={{margin: '14px 0 8px 0', fontWeight: 'bold', color: '#0070f3'}} {...props} />,
     h3: ({node, ...props}) => <strong style={{display: 'block', margin: '12px 0 4px 0', fontSize: '1.05em'}} {...props} />,
-    // 强调
     strong: ({node, ...props}) => <strong style={{fontWeight: '600', color: '#d32f2f'}} {...props} />,
     a: ({node, ...props}) => <a style={{color: '#0070f3', textDecoration: 'underline'}} {...props} />,
-    table: ({node, ...props}) => <table style={{borderCollapse: 'collapse', width: '100%', margin: '10px 0'}} {...props} />,
-    th: ({node, ...props}) => <th style={{border: '1px solid #ddd', padding: '8px', backgroundColor: '#f2f2f2'}} {...props} />,
-    td: ({node, ...props}) => <td style={{border: '1px solid #ddd', padding: '8px'}} {...props} />,
 };
 
 const AI_SENDER_NAME = '万能助理';
@@ -299,14 +292,11 @@ export default function Home() {
         }
     };
 
-    // *** 恢复导出对话功能 ***
     const handleExportChat = () => {
         if (chatHistory.length === 0) {
             alert('没有对话记录可导出。');
             return;
         }
-
-        // 构建 HTML 内容
         const htmlContent = `
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -324,7 +314,6 @@ export default function Home() {
         .sender { font-weight: bold; display: block; margin-bottom: 8px; color: #0052cc; }
         .timestamp { font-size: 0.8em; color: #999; float: right; margin-left: 10px; }
         .content { line-height: 1.6; white-space: pre-wrap; }
-        /* 简单的 Markdown 样式模拟 */
         .content h1, .content h2, .content h3 { margin: 10px 0; font-size: 1.1em; }
         .content ul, .content ol { padding-left: 20px; margin: 5px 0; }
         .content strong { color: #d32f2f; }
@@ -346,7 +335,6 @@ export default function Home() {
     </div>
 </body>
 </html>`;
-
         const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -513,7 +501,7 @@ export default function Home() {
                                     <ReactMarkdown 
                                         children={msg.message} 
                                         remarkPlugins={[remarkGfm]} 
-                                        components={markdownComponents} // 应用自定义 Markdown 样式
+                                        components={markdownComponents} 
                                     />
                                 </div>
                             </div>
