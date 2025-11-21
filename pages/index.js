@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+// 仅保留不依赖媒体查询的样式或通用样式。
+// 布局相关的样式已转移到 global.css 并通过 className 应用。
 const simpleStyles = {
     container: {
         minHeight: '100vh',
@@ -16,24 +18,8 @@ const simpleStyles = {
         color: '#333',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     },
-    main: {
-        padding: '2rem 0',
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'row', 
-        alignItems: 'flex-start',
-        width: '100%',
-        maxWidth: '1200px', 
-        position: 'relative', 
-    },
-    chatContainer: {
-        flex: 1, 
-        marginRight: '30px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        maxWidth: '900px',
-    },
+    // main, chatContainer, memberListContainer 的布局已通过 global.css 覆盖
+
     title: {
         margin: '0',
         lineHeight: 1.15,
@@ -47,11 +33,11 @@ const simpleStyles = {
         borderRadius: '8px',
         padding: '20px',
         height: '500px',
-        overflowY: 'scroll', // 允许滚动
+        overflowY: 'scroll',
         marginBottom: '15px',
         backgroundColor: '#f9f9f9',
         boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)',
-        scrollBehavior: 'auto', // 🚨 关键：禁用平滑滚动以防止跳动，由代码控制
+        scrollBehavior: 'auto', // 禁用平滑滚动以防止跳动
     },
     chatHeader: {
         display: 'flex',
@@ -162,6 +148,7 @@ const simpleStyles = {
 };
 
 const markdownComponents = {
+    // 强制保留换行符，解决粘连问题
     p: ({node, ...props}) => <p style={{margin: '0 0 10px 0', lineHeight: '1.6', whiteSpace: 'pre-wrap'}} {...props} />,
     ul: ({node, ...props}) => <ul style={{paddingLeft: '20px', margin: '0 0 10px 0'}} {...props} />,
     ol: ({node, ...props}) => <ol style={{paddingLeft: '20px', margin: '0 0 10px 0'}} {...props} />,
@@ -189,11 +176,11 @@ export default function Home() {
     
     const aiRole = `**${AI_SENDER_NAME}**`; 
     
-    // 🚨 修改引用：直接引用 chatArea 容器，而不是底部的 div
+    // 绑定到 chatArea 容器
     const chatAreaRef = useRef(null); 
     const inputRef = useRef(null);
 
-    // 🚨 核心修复：滚动逻辑
+    // 核心修复：滚动逻辑
     useEffect(() => {
         if (chatAreaRef.current) {
             // 使用 setTimeout 确保在 DOM 渲染完成、内容高度撑开后才滚动
@@ -436,7 +423,7 @@ export default function Home() {
                 <Head>
                     <title>多人 AI 智能聊天室 - 登录</title>
                 </Head>
-                <main style={simpleStyles.chatContainer}>
+                <main style={{...simpleStyles.chatContainer, margin: 'auto'}}>
                     <h1 style={simpleStyles.title}>
                         <span role="img" aria-label="robot">🤖</span>
                         <span role="img" aria-label="person">🧑‍💻</span> 
@@ -475,9 +462,28 @@ export default function Home() {
                 <title>多人 AI 智能聊天室</title>
             </Head>
 
-            <div style={simpleStyles.main}>
-                <div style={simpleStyles.chatContainer}>
-                    <h1 style={simpleStyles.title}>
+            {/* 🚨 应用响应式类名 */}
+            <div className="main-layout" style={{ 
+                padding: '2rem 0', 
+                flex: 1, 
+                display: 'flex', 
+                flexDirection: 'row', // 默认是 row
+                alignItems: 'flex-start',
+                width: '100%',
+                maxWidth: '1200px', 
+                position: 'relative', 
+            }}>
+                {/* 🚨 应用响应式类名 */}
+                <div className="chat-container" style={{ 
+                    flex: 1, 
+                    marginRight: '30px', // 默认右侧间距
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    maxWidth: '900px',
+                }}>
+                    {/* 🚨 应用响应式类名 */}
+                    <h1 style={simpleStyles.title} className="chat-title">
                         <span role="img" aria-label="robot">🤖</span>
                         <span role="img" aria-label="person">🧑‍💻</span> 
                         多人 AI 智能聊天室
@@ -493,13 +499,15 @@ export default function Home() {
 
                     {error && <div style={simpleStyles.errorBox}>{error}</div>}
 
-                    {/* 🚨 绑定 ref 到这个 div，而不是内部的空 div */}
-                    <div style={simpleStyles.chatArea} ref={chatAreaRef}>
+                    {/* 🚨 应用 ref 和响应式类名 */}
+                    <div style={simpleStyles.chatArea} ref={chatAreaRef} className="chat-area">
                         {chatHistory && chatHistory.map((msg, index) => ( 
                             <div key={index} style={{
                                 ...simpleStyles.messageContainer,
                                 ...(msg.role === 'user' ? simpleStyles.userMessage : simpleStyles.modelMessage),
-                            }}>
+                            }}
+                            className="message-container" // 🚨 应用响应式类名
+                            >
                                 <strong>{msg.sender}:</strong>
                                 <div style={{ wordWrap: 'break-word', marginTop: '5px' }}>
                                     <ReactMarkdown 
@@ -512,14 +520,15 @@ export default function Home() {
                         ))}
                     </div>
                     
-                    <form onSubmit={sendMessage} style={simpleStyles.inputArea}>
+                    {/* 🚨 应用响应式类名 */}
+                    <form onSubmit={sendMessage} style={simpleStyles.inputArea} className="input-area">
                         {showMemberSelect && filteredMembers.length > 0 && (
                             <div style={simpleStyles.memberSelectMenu}>
                                 {filteredMembers.map((member, index) => (
                                     <div 
                                         key={index} 
                                         style={simpleStyles.memberSelectItem}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = simpleStyles.memberSelectItemHover.backgroundColor}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                                         onClick={() => selectMember(member)}
                                     >
@@ -550,7 +559,8 @@ export default function Home() {
                     </p>
                 </div>
 
-                <div style={simpleStyles.memberListContainer}>
+                {/* 🚨 应用响应式类名 */}
+                <div style={simpleStyles.memberListContainer} className="member-list-container">
                     <strong>在线成员</strong>
                     <hr/>
                     {onlineMembers.length > 0 ? (
