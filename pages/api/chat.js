@@ -1,8 +1,8 @@
 // pages/api/chat.js
 
-// 🚨 最终路径修正: 使用 '../lib/'
-import { connectToMongo } from '../lib/mongo'; 
-import { GoogleGenAI } from '../lib/ai';
+// 🚨 最终路径修正: 使用 '../../lib/'
+import { connectToMongo } from '../../lib/mongo'; 
+import { GoogleGenAI } from '../../lib/ai';
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {

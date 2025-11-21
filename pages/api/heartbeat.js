@@ -1,6 +1,6 @@
 // pages/api/heartbeat.js
-// 🚨 路径修正: 使用 '../lib/mongo'
-import { connectToMongo } from '../lib/mongo'; 
+// 🚨 最终路径修正: 使用 '../../lib/mongo'
+import { connectToMongo } from '../../lib/mongo'; 
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -14,7 +14,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 🚨 使用统一的 connectToMongo 
     const { OnlineUser } = await connectToMongo();
     
     // 1. 更新或插入用户的活跃时间
