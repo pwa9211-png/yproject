@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-// 定义一个简单的CSS对象来代替Home.module.css，以提供基本样式
+// 定义页面布局样式
 const simpleStyles = {
     container: {
         minHeight: '100vh',
@@ -15,6 +15,7 @@ const simpleStyles = {
         alignItems: 'center',
         backgroundColor: 'white',
         color: '#333',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     },
     main: {
         padding: '2rem 0',
@@ -44,12 +45,13 @@ const simpleStyles = {
     chatArea: {
         width: '100%',
         border: '1px solid #ccc',
-        borderRadius: '5px',
-        padding: '10px',
-        height: '400px',
+        borderRadius: '8px',
+        padding: '20px',
+        height: '500px', // 稍微增高一点
         overflowY: 'scroll',
-        marginBottom: '10px',
+        marginBottom: '15px',
         backgroundColor: '#f9f9f9',
+        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)',
     },
     chatHeader: {
         display: 'flex',
@@ -63,24 +65,27 @@ const simpleStyles = {
     },
     messageContainer: {
         marginBottom: '15px',
-        padding: '10px',
-        borderRadius: '8px',
+        padding: '12px 16px',
+        borderRadius: '12px',
         clear: 'both',
         overflow: 'hidden',
+        maxWidth: '80%', // 限制消息宽度，更像气泡
+        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
     },
     userMessage: {
         float: 'right',
         backgroundColor: '#0070f3',
         color: 'white',
-        maxWidth: '70%',
         marginLeft: 'auto',
+        borderBottomRightRadius: '2px',
     },
     modelMessage: {
         float: 'left',
-        backgroundColor: '#eee',
+        backgroundColor: 'white', // AI 消息用白色背景
         color: '#333',
-        maxWidth: '70%',
         marginRight: 'auto',
+        border: '1px solid #e0e0e0',
+        borderBottomLeftRadius: '2px',
     },
     inputArea: {
         display: 'flex',
@@ -89,20 +94,22 @@ const simpleStyles = {
     },
     textInput: {
         flexGrow: 1,
-        padding: '10px',
+        padding: '12px',
         marginRight: '10px',
         border: '1px solid #ccc',
         borderRadius: '4px',
         fontSize: '1rem',
+        outline: 'none',
     },
     sendButton: {
-        padding: '10px 20px',
+        padding: '10px 25px',
         backgroundColor: '#0070f3',
         color: 'white',
         border: 'none',
         borderRadius: '4px',
         cursor: 'pointer',
         fontSize: '1rem',
+        fontWeight: 'bold',
         whiteSpace: 'nowrap',
     },
     errorBox: {
@@ -119,44 +126,63 @@ const simpleStyles = {
         flexDirection: 'column',
         gap: '15px',
         width: '300px',
-        padding: '20px',
+        padding: '30px',
         border: '1px solid #ddd',
         borderRadius: '8px',
         backgroundColor: '#fefefe',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
     },
     memberListContainer: {
-        width: '200px',
+        width: '220px',
         border: '1px solid #ddd',
-        padding: '10px',
-        borderRadius: '4px',
+        padding: '15px',
+        borderRadius: '8px',
         backgroundColor: '#fff',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
         marginTop: '105px', 
     },
     memberSelectMenu: {
         position: 'absolute',
-        bottom: '50px', 
+        bottom: '55px', 
         left: '0',
         width: '200px',
-        maxHeight: '150px',
+        maxHeight: '200px',
         overflowY: 'auto',
         backgroundColor: '#fff',
         border: '1px solid #ccc',
         borderRadius: '4px',
-        zIndex: 10,
-        boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+        zIndex: 100,
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
     },
     memberSelectItem: {
-        padding: '8px',
+        padding: '10px',
         cursor: 'pointer',
-    },
-    memberSelectItemHover: {
-        backgroundColor: '#f0f0f0',
+        borderBottom: '1px solid #f0f0f0',
     },
 };
 
-const AI_SENDER_NAME = '万能助理';
+// *** 新增：Markdown 渲染样式的自定义组件 ***
+// 这会让 AI 的回复（列表、标题等）看起来更整齐
+const markdownComponents = {
+    // 段落
+    p: ({node, ...props}) => <p style={{margin: '0 0 8px 0', lineHeight: '1.6'}} {...props} />,
+    // 列表
+    ul: ({node, ...props}) => <ul style={{paddingLeft: '20px', margin: '0 0 10px 0'}} {...props} />,
+    ol: ({node, ...props}) => <ol style={{paddingLeft: '20px', margin: '0 0 10px 0'}} {...props} />,
+    li: ({node, ...props}) => <li style={{marginBottom: '4px', lineHeight: '1.5'}} {...props} />,
+    // 标题
+    h1: ({node, ...props}) => <h3 style={{margin: '16px 0 8px 0', fontWeight: 'bold', borderBottom: '1px solid #eee', paddingBottom: '5px'}} {...props} />,
+    h2: ({node, ...props}) => <h4 style={{margin: '14px 0 8px 0', fontWeight: 'bold', color: '#0070f3'}} {...props} />,
+    h3: ({node, ...props}) => <strong style={{display: 'block', margin: '12px 0 4px 0', fontSize: '1.05em'}} {...props} />,
+    // 强调
+    strong: ({node, ...props}) => <strong style={{fontWeight: '600', color: '#d32f2f'}} {...props} />,
+    a: ({node, ...props}) => <a style={{color: '#0070f3', textDecoration: 'underline'}} {...props} />,
+    table: ({node, ...props}) => <table style={{borderCollapse: 'collapse', width: '100%', margin: '10px 0'}} {...props} />,
+    th: ({node, ...props}) => <th style={{border: '1px solid #ddd', padding: '8px', backgroundColor: '#f2f2f2'}} {...props} />,
+    td: ({node, ...props}) => <td style={{border: '1px solid #ddd', padding: '8px'}} {...props} />,
+};
 
+const AI_SENDER_NAME = '万能助理';
 
 export default function Home() {
     const [room, setRoom] = useState('');
@@ -182,39 +208,31 @@ export default function Home() {
         }
     }, [chatHistory]);
 
-
-    // 获取在线成员列表
     const fetchOnlineMembers = async (currentRoom, currentSender) => {
         if (!currentRoom) {
             setOnlineMembers([currentSender, AI_SENDER_NAME]);
             return;
         }
-
         let membersFromApi = [];
         try {
             const res = await fetch(`/api/online-status?room=${currentRoom}&sender=${currentSender}`);
             const data = await res.json();
-            
             if (res.ok && data.members && Array.isArray(data.members)) {
                 membersFromApi = data.members.map(m => m.sender);
             }
         } catch (err) {
             console.error("Failed to fetch online members:", err);
         }
-
         const uniqueMembers = new Set([currentSender, AI_SENDER_NAME, ...membersFromApi]);
         const finalMembers = Array.from(uniqueMembers);
-        
         finalMembers.sort((a, b) => {
             if (a === currentSender) return -1;
             if (b === currentSender) return 1;
             return 0;
         });
-
         setOnlineMembers(finalMembers);
     };
 
-    // 加载历史消息的逻辑
     const fetchHistory = async (currentRoom) => {
         if (!currentRoom) return;
         try {
@@ -233,31 +251,22 @@ export default function Home() {
         }
     };
 
-    // 核心：设置心跳、在线状态轮询 AND 聊天记录轮询
     useEffect(() => {
         if (!isLoggedIn) return;
-
-        // 1. 立即执行一次
         fetchOnlineMembers(room, sender);
         fetchHistory(room);
-
-        // 2. 设置定时器 (每3秒轮询一次)
         const interval = setInterval(() => {
             fetchOnlineMembers(room, sender);
             fetchHistory(room); 
-            
             fetch('/api/heartbeat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ room, username: sender }),
             }).catch(err => console.error("Heartbeat failed", err));
-
         }, 3000); 
-
         return () => clearInterval(interval);
     }, [isLoggedIn, room, sender]); 
 
-    // 登录/加入房间逻辑
     const handleLogin = (e) => {
         e.preventDefault();
         if (room && sender) {
@@ -269,11 +278,9 @@ export default function Home() {
         }
     };
 
-    // 清空历史逻辑
     const clearHistory = async () => {
         if (!room) return;
         if (!window.confirm("确定要清空当前房间的所有聊天历史吗？")) return;
-
         try {
             const res = await fetch('/api/clear-history', {
                 method: 'POST',
@@ -292,12 +299,68 @@ export default function Home() {
         }
     };
 
+    // *** 恢复导出对话功能 ***
+    const handleExportChat = () => {
+        if (chatHistory.length === 0) {
+            alert('没有对话记录可导出。');
+            return;
+        }
 
-    // 处理输入变化和 @ 菜单
+        // 构建 HTML 内容
+        const htmlContent = `
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聊天记录 - 房间 ${room}</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background-color: #f9f9f9; }
+        h1 { text-align: center; color: #333; border-bottom: 2px solid #0070f3; padding-bottom: 10px; }
+        .info { text-align: center; color: #666; margin-bottom: 30px; font-size: 0.9em; }
+        .message { margin-bottom: 20px; padding: 15px; border-radius: 10px; position: relative; clear: both; max-width: 80%; }
+        .user { background-color: #e6f7ff; border: 1px solid #b3e0ff; margin-left: auto; text-align: left; }
+        .model { background-color: #fff; border: 1px solid #ddd; margin-right: auto; text-align: left; }
+        .sender { font-weight: bold; display: block; margin-bottom: 8px; color: #0052cc; }
+        .timestamp { font-size: 0.8em; color: #999; float: right; margin-left: 10px; }
+        .content { line-height: 1.6; white-space: pre-wrap; }
+        /* 简单的 Markdown 样式模拟 */
+        .content h1, .content h2, .content h3 { margin: 10px 0; font-size: 1.1em; }
+        .content ul, .content ol { padding-left: 20px; margin: 5px 0; }
+        .content strong { color: #d32f2f; }
+    </style>
+</head>
+<body>
+    <h1>多人 AI 智能聊天室 - 记录</h1>
+    <div class="info">
+        <p>房间号: ${room} | 导出时间: ${new Date().toLocaleString()}</p>
+    </div>
+    <div class="chat-log">
+        ${chatHistory.map(msg => `
+            <div class="message ${msg.role === 'user' ? 'user' : 'model'}">
+                <span class="timestamp">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+                <span class="sender">${msg.sender} (${msg.role === 'model' ? 'AI' : '用户'})</span>
+                <div class="content">${msg.message}</div>
+            </div>
+        `).join('')}
+    </div>
+</body>
+</html>`;
+
+        const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `chat_history_room_${room}_${new Date().toISOString().slice(0, 10)}.html`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     const handleInputChange = (e) => {
         const value = e.target.value;
         setMessage(value);
-
         let lastAtIndex = -1;
         for (let i = value.length - 1; i >= 0; i--) {
             if (value[i] === '@') {
@@ -309,7 +372,6 @@ export default function Home() {
                 break;
             }
         }
-        
         if (lastAtIndex !== -1 && lastAtIndex === value.length - 1) {
             const list = onlineMembers.filter(m => m !== sender);
             setFilteredMembers(list);
@@ -325,7 +387,6 @@ export default function Home() {
         }
     };
     
-    // 选择成员
     const selectMember = (member) => {
         const lastAtIndex = message.lastIndexOf('@');
         const newMessage = message.substring(0, lastAtIndex) + `@${member} `;
@@ -334,17 +395,13 @@ export default function Home() {
         inputRef.current.focus();
     };
 
-    // 发送消息逻辑
     const sendMessage = async (e) => {
         e.preventDefault();
         if (!message.trim() || !isLoggedIn || isSending) return;
-
         const userMessage = { room, sender, message: message.trim(), role: 'user', timestamp: new Date() };
-        
         setChatHistory(prev => [...prev, userMessage]);
         setMessage('');
         setIsSending(true);
-
         try {
             const res = await fetch('/api/chat', {
                 method: 'POST',
@@ -356,9 +413,7 @@ export default function Home() {
                     aiRole: AI_SENDER_NAME,
                 }),
             });
-
             const data = await res.json();
-
             if (res.ok && data.success) {
                 if (data.ai_reply && data.ai_reply !== 'AI 未被 @，不回复。') {
                     const aiMessage = { 
@@ -376,7 +431,6 @@ export default function Home() {
                 setChatHistory(prev => prev.filter(msg => msg !== userMessage));
                 setError(`发送失败，请重试。原因: ${data.message || 'API 请求失败: 服务器处理错误'}`);
             }
-
         } catch (err) {
             setChatHistory(prev => prev.filter(msg => msg !== userMessage));
             setError(`发送失败，请重试。原因: 网络连接错误或服务器无响应。`);
@@ -385,8 +439,6 @@ export default function Home() {
         }
     };
 
-
-    // 登录界面
     if (!isLoggedIn) {
         return (
             <div style={simpleStyles.container}>
@@ -426,7 +478,6 @@ export default function Home() {
         );
     }
 
-    // 主聊天界面
     return (
         <div style={simpleStyles.container}>
             <Head>
@@ -434,10 +485,7 @@ export default function Home() {
             </Head>
 
             <div style={simpleStyles.main}>
-                
-                {/* 左侧主要聊天区域 */}
                 <div style={simpleStyles.chatContainer}>
-                    
                     <h1 style={simpleStyles.title}>
                         <span role="img" aria-label="robot">🤖</span>
                         <span role="img" aria-label="person">🧑‍💻</span> 
@@ -447,7 +495,7 @@ export default function Home() {
                     <div style={simpleStyles.chatHeader}>
                         <span>当前房间: **{room}** | AI 角色: {aiRole} ({sender})</span>
                         <div>
-                            <button onClick={() => alert("导出对话功能待实现")} style={{ ...simpleStyles.sendButton, backgroundColor: '#6c757d', marginRight: '10px' }}>导出对话 (HTML)</button>
+                            <button onClick={handleExportChat} style={{ ...simpleStyles.sendButton, backgroundColor: '#6c757d', marginRight: '10px' }}>导出对话 (HTML)</button>
                             <button onClick={clearHistory} style={{ ...simpleStyles.sendButton, backgroundColor: '#dc3545' }}>清空对话</button>
                         </div>
                     </div>
@@ -462,7 +510,11 @@ export default function Home() {
                             }}>
                                 <strong>{msg.sender}:</strong>
                                 <div style={{ wordWrap: 'break-word', marginTop: '5px' }}>
-                                    <ReactMarkdown children={msg.message} remarkPlugins={[remarkGfm]} />
+                                    <ReactMarkdown 
+                                        children={msg.message} 
+                                        remarkPlugins={[remarkGfm]} 
+                                        components={markdownComponents} // 应用自定义 Markdown 样式
+                                    />
                                 </div>
                             </div>
                         ))}
@@ -470,8 +522,6 @@ export default function Home() {
                     </div>
                     
                     <form onSubmit={sendMessage} style={simpleStyles.inputArea}>
-                        
-                        {/* 成员选择菜单 */}
                         {showMemberSelect && filteredMembers.length > 0 && (
                             <div style={simpleStyles.memberSelectMenu}>
                                 {filteredMembers.map((member, index) => (
@@ -509,7 +559,6 @@ export default function Home() {
                     </p>
                 </div>
 
-                {/* 右侧在线成员列表 */}
                 <div style={simpleStyles.memberListContainer}>
                     <strong>在线成员</strong>
                     <hr/>
