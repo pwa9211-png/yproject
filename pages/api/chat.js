@@ -1,7 +1,7 @@
 // pages/api/chat.js
 
 // 🚨 路径修正: 从 /pages/api 向上跳一级到 /pages，再向上跳一级到项目根目录，然后进入 /lib
-import { connectToMongo } from '../../lib/mongodb'; 
+import { connectToMongo } from '../../lib/mongodb'; // 确保这里是 mongodb
 import { GoogleGenAI } from '../../lib/ai';
 
 export default async function handler(req, res) {
@@ -21,11 +21,11 @@ export default async function handler(req, res) {
 
     // --- 🚨 权限控制逻辑 START ---
     const RESTRICTED_ROOM = '2';
-    // 只有 Didy 和 Shane 可以进入并发送消息到 2 号房间
+    // 严格区分大小写：只有 'Didy' 和 'Shane' 可以进入 2 号房间
     const ALLOWED_USERS = ['Didy', 'Shane']; 
 
     if (room === RESTRICTED_ROOM) {
-        // 检查发送者是否在白名单内
+        // 严格检查发送者名称是否精确匹配白名单中的任一用户
         if (!ALLOWED_USERS.includes(sender)) {
             // 如果用户不在白名单内，拒绝操作
             return res.status(403).json({
@@ -37,13 +37,14 @@ export default async function handler(req, res) {
     // --- 权限控制逻辑 END ---
 
     try {
+        // 确保您的 connectToMongo 函数正确地导出了 ChatMessage 和 OnlineUser
         const { ChatMessage, OnlineUser } = await connectToMongo();
 
         const timestamp = new Date();
 
-        // --- 1. 保存用户消息到数据库 (关键：使用 room 字段) ---
+        // 1. 保存用户消息到数据库
         const userMessageDoc = { 
-            room, // 确保使用了 room 字段
+            room,
             sender, 
             message, 
             role: 'user', 
@@ -51,64 +52,55 @@ export default async function handler(req, res) {
         };
         await ChatMessage.insertOne(userMessageDoc);
 
-        // --- 2. 更新用户心跳 (确保用户在线) ---
-        // 确保 Chat 和 Heartbeat API 使用相同的 OnlineUser 集合
+        // 2. 更新用户心跳
         await OnlineUser.updateOne(
             { room: room, sender: sender }, 
             { $set: { last_seen: new Date() } }, 
             { upsert: true }
         );
 
-
-        // --- 3. 检查是否需要 AI 回复 (用户是否 @AI) --
-        const aiMentionPattern = new RegExp(`@${aiRole.replace(/\*\*/g, '')}`, 'i'); // 匹配 @万能助理
-        
-        // 检查消息是否以 "/设定角色" 开头
+        // 3. 检查是否需要 AI 回复 
+        const aiMentionPattern = new RegExp(`@${aiRole.replace(/\*\*/g, '')}`, 'i');
         const setRoleCommandPattern = new RegExp('/设定角色\\s*(.+)', 'i');
         const roleMatch = message.match(setRoleCommandPattern);
 
         if (roleMatch) {
-            // 如果是设定角色命令，AI 不用回复，但可以在前端做提示
             return res.status(200).json({ 
                 success: true, 
                 message: 'Command processed.', 
-                ai_reply: 'AI 角色设定成功。' // 简单的 AI 回复，让前端知道命令被执行了
+                ai_reply: 'AI 角色设定成功。'
             });
         }
 
-        // 仅在用户 @AI 时，才进行 AI 响应
         if (!message.match(aiMentionPattern)) {
             return res.status(200).json({ 
                 success: true, 
                 message: 'User message saved.', 
-                ai_reply: 'AI 未被 @，不回复。' // 明确返回 AI 未回复信息
+                ai_reply: 'AI 未被 @，不回复。'
             });
         }
         
-        // --- 4. 获取最近的聊天历史作为上下文 ---
-        // 获取房间的最近 10 条消息作为上下文
+        // 4. 获取最近的聊天历史作为上下文
         const historyDocs = await ChatMessage.find({ room })
             .sort({ timestamp: -1 })
             .limit(10)
             .toArray();
 
-        // 格式化历史记录为 AI 格式
         const context = historyDocs.reverse().map(doc => ({
             role: doc.role === 'user' ? 'user' : 'model', 
             text: doc.message
-        })).filter(m => m.text); // 过滤空消息
+        })).filter(m => m.text);
 
-        // 添加当前用户消息到上下文，并清理 @mention
         const cleanMessage = message.replace(aiMentionPattern, '').trim();
         context.push({ role: 'user', text: cleanMessage });
 
-        // --- 5. 调用 AI API ---
+        // 5. 调用 AI API
         const aiReply = await GoogleGenAI(context, aiRole);
         
-        // --- 6. 保存 AI 回复到数据库 ---
+        // 6. 保存 AI 回复到数据库
         const aiMessageDoc = { 
-            room, // 确保使用了 room 字段
-            sender: aiRole.replace(/\*\*/g, ''), // 保存不带 ** 的 AI 名称
+            room,
+            sender: aiRole.replace(/\*\*/g, ''),
             message: aiReply, 
             role: 'model', 
             timestamp: new Date() 
