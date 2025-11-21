@@ -16,19 +16,18 @@ const simpleStyles = {
         backgroundColor: 'white',
         color: '#333',
     },
-    // 调整 main 样式，使其能够容纳左右两栏布局
     main: {
         padding: '2rem 0',
         flex: 1,
         display: 'flex',
-        flexDirection: 'row', // 确保主内容区和成员列表并排
-        alignItems: 'flex-start', // 靠顶部对齐
+        flexDirection: 'row', 
+        alignItems: 'flex-start',
         width: '100%',
-        maxWidth: '1200px', // 增加最大宽度以容纳右侧栏
+        maxWidth: '1200px', 
         position: 'relative', 
     },
     chatContainer: {
-        flex: 1, // 占据大部分空间
+        flex: 1, 
         marginRight: '30px',
         display: 'flex',
         flexDirection: 'column',
@@ -86,7 +85,7 @@ const simpleStyles = {
     inputArea: {
         display: 'flex',
         width: '100%',
-        position: 'relative', // 用于定位成员选择菜单
+        position: 'relative', 
     },
     textInput: {
         flexGrow: 1,
@@ -125,7 +124,6 @@ const simpleStyles = {
         borderRadius: '8px',
         backgroundColor: '#fefefe',
     },
-    // 在线成员列表的独立容器样式
     memberListContainer: {
         width: '200px',
         border: '1px solid #ddd',
@@ -133,9 +131,8 @@ const simpleStyles = {
         borderRadius: '4px',
         backgroundColor: '#fff',
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-        marginTop: '105px', // 顶部留出标题和操作按钮的空间
+        marginTop: '105px', 
     },
-    // @ 选单的定位修复
     memberSelectMenu: {
         position: 'absolute',
         bottom: '50px', 
@@ -187,25 +184,40 @@ export default function Home() {
     }, [chatHistory]);
 
 
-    // 获取在线成员列表 (代码不变)
+    // 获取在线成员列表 (关键修复点 1)
     const fetchOnlineMembers = async (currentRoom, currentSender) => {
-        if (!currentRoom) return;
+        if (!currentRoom) {
+            // 确保即使没有房间信息，AI 也应该出现在列表中，防止列表为空
+            setOnlineMembers([currentSender, AI_SENDER_NAME]);
+            return;
+        }
+
+        let membersFromApi = [];
         try {
             const res = await fetch(`/api/online-status?room=${currentRoom}&sender=${currentSender}`);
             const data = await res.json();
-            if (res.ok && data.members) {
-                const members = data.members.map(m => m.sender).filter(m => m !== currentSender);
-                if (!members.includes(AI_SENDER_NAME)) {
-                    members.push(AI_SENDER_NAME);
-                }
-                
-                const allMembers = [currentSender, ...members];
-
-                setOnlineMembers(allMembers);
+            
+            if (res.ok && data.members && Array.isArray(data.members)) {
+                // 提取成员名称
+                membersFromApi = data.members.map(m => m.sender);
             }
         } catch (err) {
-            // 忽略错误，只影响在线列表显示
+            // API 失败时，membersFromApi 保持为空数组
+            console.error("Failed to fetch online members:", err);
         }
+
+        // 构建最终列表：确保包含当前用户和AI，并且无重复
+        const uniqueMembers = new Set([currentSender, AI_SENDER_NAME, ...membersFromApi]);
+        const finalMembers = Array.from(uniqueMembers);
+        
+        // 确保当前用户在第一个位置（如果存在）
+        finalMembers.sort((a, b) => {
+            if (a === currentSender) return -1;
+            if (b === currentSender) return 1;
+            return 0;
+        });
+
+        setOnlineMembers(finalMembers);
     };
 
     // 设置心跳和在线状态轮询
@@ -217,14 +229,11 @@ export default function Home() {
 
         // 设置定时器获取在线状态和心跳
         const interval = setInterval(() => {
-            // 确保心跳和在线状态获取都执行
             fetchOnlineMembers(room, sender);
-            // 理想情况下，这里应该还有一个发送心跳的 /api/heartbeat POST 请求
-        }, 15000); // 每15秒更新一次
+        }, 15000); 
 
         return () => clearInterval(interval);
-    }, [isLoggedIn, room, sender]);
-
+    }, [isLoggedIn, room, sender]); // 依赖项检查
 
     // 加载历史消息的逻辑 (代码不变)
     const fetchHistory = async (currentRoom) => {
@@ -281,27 +290,39 @@ export default function Home() {
     };
 
 
-    // 处理输入变化和 @ 菜单 (代码不变)
+    // 处理输入变化和 @ 菜单 (关键修复点 2：更严格的 @ 检查)
     const handleInputChange = (e) => {
         const value = e.target.value;
         setMessage(value);
 
-        const lastAtIndex = value.lastIndexOf('@');
+        // 查找最后一个非空格的 @ 符号的位置
+        let lastAtIndex = -1;
+        for (let i = value.length - 1; i >= 0; i--) {
+            if (value[i] === '@') {
+                lastAtIndex = i;
+                break;
+            }
+            // 如果遇到空格，则停止查找，因为 @ 后面不能有空格才能触发菜单
+            if (value[i] === ' ') {
+                lastAtIndex = -1; 
+                break;
+            }
+        }
         
-        // 检查是否有 @ 符号，并且 @ 不在消息开头
+        // 只有当 @ 位于末尾或者 @ 后正在输入内容时才触发
         if (lastAtIndex !== -1 && lastAtIndex === value.length - 1) {
-             // 如果只输入了 @，显示所有成员 (排除自己)
+             // 只有 @ 符号：显示所有成员 (排除自己)
             const list = onlineMembers.filter(m => m !== sender);
             setFilteredMembers(list);
             setShowMemberSelect(true);
         } else if (lastAtIndex !== -1 && lastAtIndex < value.length - 1) {
-            // 如果在 @ 后面输入了内容，进行筛选
+            // 在 @ 后面输入了内容：进行筛选
             const query = value.substring(lastAtIndex + 1).toLowerCase();
             const list = onlineMembers.filter(m => m !== sender && m.toLowerCase().includes(query));
             setFilteredMembers(list);
             setShowMemberSelect(true);
         } else {
-            // 没有 @ 或 @ 被删除，隐藏菜单
+            // 没有有效的 @ 符号，隐藏菜单
             setShowMemberSelect(false);
             setFilteredMembers([]);
         }
@@ -311,6 +332,7 @@ export default function Home() {
     const selectMember = (member) => {
         const lastAtIndex = message.lastIndexOf('@');
         
+        // 替换 @ 及其后的内容为 @[成员]
         const newMessage = message.substring(0, lastAtIndex) + `@${member} `;
         
         setMessage(newMessage);
@@ -496,12 +518,15 @@ export default function Home() {
                 <div style={simpleStyles.memberListContainer}>
                     <strong>在线成员</strong>
                     <hr/>
-                    {onlineMembers.map((member, index) => (
-                        <div key={index} style={{ marginBottom: '5px', color: member === sender ? '#0070f3' : '#333' }}>
-                            {member} {member === sender && '(你)'} {member === AI_SENDER_NAME && '(AI)'}
-                        </div>
-                    ))}
-                    {onlineMembers.length === 0 && <div style={{ color: '#aaa', fontSize: '0.9rem' }}>正在加载...</div>}
+                    {onlineMembers.length > 0 ? (
+                        onlineMembers.map((member, index) => (
+                            <div key={index} style={{ marginBottom: '5px', color: member === sender ? '#0070f3' : '#333' }}>
+                                {member} {member === sender ? '(你)' : member === AI_SENDER_NAME ? '(AI)' : ''}
+                            </div>
+                        ))
+                    ) : (
+                        <div style={{ color: '#aaa', fontSize: '0.9rem' }}>正在加载或无其他成员...</div>
+                    )}
                 </div>
             </div>
         </div>
