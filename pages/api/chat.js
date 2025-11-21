@@ -1,7 +1,7 @@
 // pages/api/chat.js
 
 // 🚨 路径修正: 从 /pages/api 向上跳一级到 /pages，再向上跳一级到项目根目录，然后进入 /lib
-import { connectToMongo } from '../../lib/mongo'; 
+import { connectToMongo } from '../../lib/mongodb'; 
 import { GoogleGenAI } from '../../lib/ai';
 
 export default async function handler(req, res) {
