@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@kimi-life/moonshot-api": "^0.0.11",      
+    "@moonshot-ai/api": "^0.0.11",      
     "mongodb": "^6.8.0",
     "next": "14.2.5",
     "react": "18.3.1",

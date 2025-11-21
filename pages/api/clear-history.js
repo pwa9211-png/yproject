@@ -1,4 +1,6 @@
-import clientPromise from '../../lib/mongodb'; // 导入优化的连接管理
+// pages/api/clear-history.js
+// 🚨 统一使用 /lib/mongo.js 导出的 connectToMongo
+import { connectToMongo } from '../lib/mongo'; 
 
 export default async function handler(req, res) {
   // 仅接受 POST 请求
@@ -12,32 +14,27 @@ export default async function handler(req, res) {
     return res.status(400).json({ message: 'Missing required field: room.' });
   }
 
-  let client;
   try {
-    client = await clientPromise;
-    const db = client.db('chatDB');
-    const messagesCollection = db.collection('messages');
+    // 🚨 使用统一的 connectToMongo 
+    const { ChatMessage, OnlineUser } = await connectToMongo();
     
-    // 还需要清除 userStatus collection 中该房间的所有心跳记录，以完全重置房间状态
-    const statusCollection = db.collection('userStatus'); 
-
-    // 删除当前房间下的所有消息记录
-    const resultMessages = await messagesCollection.deleteMany({ room });
+    // 删除当前房间下的所有消息记录 (Collection name: chat_messages)
+    const resultMessages = await ChatMessage.deleteMany({ room });
     
-    // 删除当前房间下的所有心跳记录
-    const resultStatus = await statusCollection.deleteMany({ room });
+    // 删除当前房间下的所有心跳记录 (Collection name: online_users)
+    const resultStatus = await OnlineUser.deleteMany({ room });
 
     res.status(200).json({ 
         success: true, 
-        message: `房间 ${room} 中 ${resultMessages.deletedCount} 条消息和 ${resultStatus.deletedCount} 条心跳记录已被清除。`,
+        message: `房间 ${room} 中 ${resultMessages.deletedCount} 条消息和 ${resultStatus.deletedCount} 条在线记录已被清除。`,
         deletedCount: resultMessages.deletedCount
     });
 
   } catch (error) {
     console.error('Clear History API Error:', error);
-
     res.status(500).json({ 
-        message: '无法清空历史记录。请检查数据库连接和lib/mongodb.js配置。', 
+        success: false,
+        message: '无法清除历史记录。请检查数据库连接和配置。', 
         details: error.message 
     });
   }
