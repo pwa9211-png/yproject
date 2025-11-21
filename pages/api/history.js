@@ -1,36 +1,37 @@
-import clientPromise from '../../lib/mongodb'; // 导入优化的连接管理
+// pages/api/history.js
+
+import { connectToMongo } from '../../lib/mongo';
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ message: 'Method Not Allowed' });
-  }
+    if (req.method !== 'GET') {
+        return res.status(405).json({ success: false, message: 'Method Not Allowed' });
+    }
 
-  const { room } = req.query;
+    const { room } = req.query;
 
-  if (!room) {
-    return res.status(400).json({ message: 'Missing required query parameter: room.' });
-  }
+    // 1. 字段验证
+    if (!room) {
+        return res.status(400).json({ success: false, message: 'Missing required query parameter: room.' });
+    }
 
-  let client;
-  try {
-    client = await clientPromise;
-    const db = client.db('chatDB');
-    const messagesCollection = db.collection('messages');
+    try {
+        const { ChatMessage } = await connectToMongo();
 
-    // 查找该房间的所有历史消息，按时间升序排列
-    const messages = await messagesCollection
-      .find({ room: room })
-      .sort({ timestamp: 1 })
-      .toArray();
+        // --- 2. 从数据库查询历史记录 (关键：使用 room 字段进行过滤) ---
+        const history = await ChatMessage.find({ room }) // 🚨 确保了按 room 过滤
+            .sort({ timestamp: 1 }) // 按时间升序排列
+            .limit(50) // 限制返回数量
+            .toArray();
 
-    res.status(200).json({ messages: messages });
+        return res.status(200).json({ success: true, history });
 
-  } catch (error) {
-    console.error('History API Error:', error);
-
-    res.status(500).json({ 
-      message: '无法加载历史记录。请检查数据库连接和lib/mongodb.js配置。', 
-      details: error.message 
-    });
-  }
+    } catch (error) {
+        console.error('History API Error:', error);
+        // 返回更详细的错误信息帮助调试
+        return res.status(500).json({ 
+            success: false, 
+            message: `无法从数据库加载历史记录。请检查 MONGODB_URI 配置和 MongoDB 网络访问权限。`,
+            error: error.message
+        });
+    }
 }
