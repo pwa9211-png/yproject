@@ -1,6 +1,6 @@
 // pages/api/chat.js
 
-// 🚨 路径修正: 从 '../../lib/mongo' 改为 '../lib/mongo'
+// 🚨 最终路径修正: 使用 '../lib/'
 import { connectToMongo } from '../lib/mongo'; 
 import { GoogleGenAI } from '../lib/ai';
 
@@ -52,7 +52,7 @@ export default async function handler(req, res) {
             return res.status(200).json({ 
                 success: true, 
                 message: 'User message saved.', 
-                ai_reply: 'AI 未被 @，不回复。' // 明确返回 AI 未回复信息
+                ai_reply: 'AI 未被 @，不回复。' 
             });
         }
         

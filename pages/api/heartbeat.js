@@ -1,5 +1,5 @@
 // pages/api/heartbeat.js
-// 🚨 统一使用 /lib/mongo.js 导出的 connectToMongo
+// 🚨 路径修正: 使用 '../lib/mongo'
 import { connectToMongo } from '../lib/mongo'; 
 
 export default async function handler(req, res) {
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     // 🚨 使用统一的 connectToMongo 
     const { OnlineUser } = await connectToMongo();
     
-    // 1. 更新或插入用户的活跃时间 (Collection name: online_users)
+    // 1. 更新或插入用户的活跃时间
     await OnlineUser.updateOne(
       { room: room, sender: username }, // 使用 sender 字段保持一致
       { $set: { last_seen: new Date(), sender: username } }, 

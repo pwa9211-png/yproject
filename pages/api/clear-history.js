@@ -1,5 +1,5 @@
 // pages/api/clear-history.js
-// 🚨 统一使用 /lib/mongo.js 导出的 connectToMongo
+// 🚨 路径修正: 使用 '../lib/mongo'
 import { connectToMongo } from '../lib/mongo'; 
 
 export default async function handler(req, res) {
@@ -18,10 +18,10 @@ export default async function handler(req, res) {
     // 🚨 使用统一的 connectToMongo 
     const { ChatMessage, OnlineUser } = await connectToMongo();
     
-    // 删除当前房间下的所有消息记录 (Collection name: chat_messages)
+    // 删除当前房间下的所有消息记录
     const resultMessages = await ChatMessage.deleteMany({ room });
     
-    // 删除当前房间下的所有心跳记录 (Collection name: online_users)
+    // 删除当前房间下的所有心跳记录
     const resultStatus = await OnlineUser.deleteMany({ room });
 
     res.status(200).json({ 
