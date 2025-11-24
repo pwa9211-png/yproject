@@ -7,7 +7,6 @@ import remarkGfm from 'remark-gfm';
 // --- 权限常量定义 (保持一致) ---
 const RESTRICTED_ROOM = '2';
 const ALLOWED_USERS = ['Didy', 'Shane']; 
-// 🚨 修复点 #2: AI 的默认昵称改为常量，但运行时使用 state (aiRole)
 const DEFAULT_AI_SENDER_NAME = '万能助理'; 
 // -------------------
 
@@ -23,7 +22,7 @@ const simpleStyles = {
         alignItems: 'center',
         backgroundColor: 'white',
         color: '#333',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        fontFamily: '-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif',
     },
     main: {
         padding: '2rem 0',
@@ -61,14 +60,13 @@ const simpleStyles = {
         padding: '10px',
         border: '1px solid #ddd',
         borderRadius: '4px',
-        backgroundColor: '#ece5dd', // 微信/QQ 聊天背景色
-        display: 'flex', // 启用 flex 布局
-        flexDirection: 'column', // 垂直排列
+        backgroundColor: '#ece5dd', 
+        display: 'flex', 
+        flexDirection: 'column', 
     },
-    // 自己的消息在右边
     myMessage: {
         backgroundColor: '#e1ffc7',
-        alignSelf: 'flex-end', // 靠右对齐
+        alignSelf: 'flex-end', 
         maxWidth: '80%',
         marginBottom: '10px',
         padding: '10px',
@@ -77,10 +75,9 @@ const simpleStyles = {
         boxShadow: '0 1px 1px rgba(0,0,0,0.1)',
         wordBreak: 'break-word',
     },
-    // 其他人（包括 AI）的消息在左边
     otherMessage: {
         backgroundColor: '#ffffff', 
-        alignSelf: 'flex-start', // 靠左对齐
+        alignSelf: 'flex-start', 
         maxWidth: '80%',
         marginBottom: '10px',
         padding: '10px',
@@ -129,7 +126,7 @@ const simpleStyles = {
     exportButton: {
         padding: '10px 15px',
         fontSize: '1rem',
-        backgroundColor: '#6c757d', // 灰色
+        backgroundColor: '#6c757d', 
         color: 'white',
         border: 'none',
         borderRadius: '5px',
@@ -161,7 +158,6 @@ const markdownComponents = {
 export default function Home() {
     const [room, setRoom] = useState('');
     const [sender, setSender] = useState('');
-    // 🚨 修复点 #2: 初始状态使用 DEFAULT_AI_SENDER_NAME
     const [aiRole, setAiRole] = useState(DEFAULT_AI_SENDER_NAME); 
     const [isJoined, setIsJoined] = useState(false);
     const [messageInput, setMessageInput] = useState('');
@@ -185,7 +181,6 @@ export default function Home() {
         let onlineStatusPollingInterval;
 
         if (isJoined) {
-            // 心跳：每 20 秒发送一次，保持在线状态
             const sendHeartbeat = () => {
                 fetch('/api/heartbeat', {
                     method: 'POST',
@@ -194,7 +189,6 @@ export default function Home() {
                 }).catch(err => console.error('Heartbeat failed:', err));
             };
 
-            // 消息轮询：每 2 秒检查一次新消息
             const fetchHistory = async () => {
                 try {
                     const response = await fetch(`/api/history?room=${room}&sender=${sender}`);
@@ -218,8 +212,7 @@ export default function Home() {
                             sender: msg.sender,
                             message: msg.message,
                             timestamp: msg.timestamp || new Date(),
-                            // 🚨 使用 aiRole 来判断消息的 role
-                            role: msg.role || (msg.sender === aiRole ? 'model' : 'user')
+                            role: msg.role || (msg.sender === aiRole ? 'model' : 'user') 
                         })));
                         setLastHistoryCount(history.length);
                     }
@@ -228,7 +221,6 @@ export default function Home() {
                 }
             };
             
-            // 在线状态轮询：每 10 秒检查一次在线成员
             const fetchOnlineStatus = async () => {
                 try {
                     const response = await fetch(`/api/online-status?room=${room}&sender=${sender}`);
@@ -236,13 +228,11 @@ export default function Home() {
                     
                     if (data.success) {
                         let members = data.members;
-                        // 🚨 修复点 #2: 检查当前的 aiRole 是否在列表中
                         if (!members.includes(aiRole)) {
                             members.push(aiRole);
                         }
                         setOnlineMembers(members.sort());
                     } else if (response.status === 403) {
-                        // 🚨 权限拒绝时，显示自己和当前的 aiRole
                         setOnlineMembers([sender, aiRole].sort()); 
                     }
                 } catch (error) {
@@ -251,16 +241,15 @@ export default function Home() {
             };
 
 
-            sendHeartbeat(); // 首次进入发送心跳
-            fetchHistory(); // 首次加载历史
-            fetchOnlineStatus(); // 首次加载在线状态
+            sendHeartbeat(); 
+            fetchHistory(); 
+            fetchOnlineStatus(); 
             
-            heartbeatInterval = setInterval(sendHeartbeat, 20000); // 20秒心跳
-            messagePollingInterval = setInterval(fetchHistory, 2000); // 2秒轮询
-            onlineStatusPollingInterval = setInterval(fetchOnlineStatus, 10000); // 10秒轮询
+            heartbeatInterval = setInterval(sendHeartbeat, 20000); 
+            messagePollingInterval = setInterval(fetchHistory, 2000); 
+            onlineStatusPollingInterval = setInterval(fetchOnlineStatus, 10000); 
         }
 
-        // 🚨 依赖中加入 aiRole，确保 aiRole 改变时，轮询会重新加载正确的 AI 昵称
         return () => {
             clearInterval(heartbeatInterval);
             clearInterval(messagePollingInterval);
@@ -270,7 +259,6 @@ export default function Home() {
     }, [isJoined, room, sender, lastHistoryCount, aiRole]); 
 
 
-    // 处理加入聊天室
     const handleJoin = (e) => {
         e.preventDefault();
         if (room.trim() && sender.trim()) {
@@ -280,18 +268,30 @@ export default function Home() {
         }
     };
 
-    // 🚨 修复点 #3: 消息输入框的 onChange 处理函数
+    // 🚨 修复点 #3: 优化消息输入框的 onChange 处理函数
     const handleInputChange = (e) => {
         const value = e.target.value;
-        setMessageInput(value);
-        
-        // 如果用户只输入了 @，自动填充 AI 角色名称并带一个空格
-        if (value === '@') {
-            setMessageInput(`@${aiRole} `);
+        const cursorPosition = e.target.selectionStart;
+
+        // 1. 检查是否刚刚输入了 @
+        // 逻辑：如果当前值是 "@" 并且光标在最后，或者值是 " @" 并且光标在最后
+        const justTypedAt = (value.endsWith('@') && value.length === cursorPosition) ||
+                            (value.endsWith(' @') && value.length === cursorPosition);
+
+        // 2. 只有当用户输入'@'且后面没有跟任何字符（或只有空格）时，进行补全
+        if (value.trim() === '@' && justTypedAt) {
+             const mention = `@${aiRole} `;
+             setMessageInput(mention);
+             // 关键：将光标移动到补全字符串的末尾
+             setTimeout(() => {
+                e.target.selectionStart = e.target.selectionEnd = mention.length;
+             }, 0);
+        } else {
+            // 正常更新输入值
+            setMessageInput(value);
         }
     };
 
-    // 处理消息发送
     const handleSendMessage = async (e) => {
         e.preventDefault();
         const message = messageInput.trim();
@@ -322,7 +322,6 @@ export default function Home() {
         }
     };
     
-    // 处理清空历史记录
     const handleClearHistory = async () => {
         if (!room) {
             alert('请先加入聊天室。');
@@ -346,7 +345,6 @@ export default function Home() {
                 alert(data.message);
                 setMessages([]);
                 setLastHistoryCount(0);
-                // 🚨 修复点 #2: 清空后只留下自己和当前的 aiRole
                 setOnlineMembers(prev => prev.filter(m => m === sender || m === aiRole)); 
             } else {
                 alert(`清空失败: ${data.message}`);
@@ -357,7 +355,6 @@ export default function Home() {
         }
     };
     
-    // 对话导出到 HTML 功能实现
     const handleExportHtml = async () => {
         if (!room) {
             alert('请先加入聊天室。');
@@ -415,7 +412,6 @@ export default function Home() {
 </body>
 </html>`;
 
-            // 3. 创建并下载文件
             const blob = new Blob([htmlContent], { type: 'text/html' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -458,9 +454,7 @@ export default function Home() {
                         />
                         <input
                             type="text"
-                            // 🚨 使用 DEFAULT_AI_SENDER_NAME 进行提示
                             placeholder={`设置 AI 角色 (当前: ${DEFAULT_AI_SENDER_NAME})`}
-                            // 如果用户输入框为空，则使用默认角色
                             value={aiRole === DEFAULT_AI_SENDER_NAME ? '' : aiRole}
                             onChange={(e) => setAiRole(e.target.value.trim() || DEFAULT_AI_SENDER_NAME)}
                             style={simpleStyles.textInput}
@@ -488,7 +482,6 @@ export default function Home() {
             </h1>
 
             <div style={simpleStyles.main} className="main-layout">
-                {/* 左侧聊天区域 */}
                 <div style={simpleStyles.chatContainer} className="chat-container">
                     <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '10px'}}>
                          <button onClick={() => setIsJoined(false)} style={simpleStyles.clearButton}>
@@ -504,11 +497,9 @@ export default function Home() {
                         </div>
                     </div>
                    
-                    {/* 消息展示区 */}
                     <div ref={chatAreaRef} style={simpleStyles.chatArea}>
                         {messages.map((msg, index) => {
                             const isMe = msg.sender === sender;
-                            // 🚨 修复点 #2: 使用 aiRole 判断 AI 消息
                             const isAi = msg.sender === aiRole; 
                             const messageStyle = isMe ? simpleStyles.myMessage : simpleStyles.otherMessage;
                             const senderColor = isMe ? '#075e54' : (isAi ? '#1e90ff' : '#000'); 
@@ -526,21 +517,18 @@ export default function Home() {
                                             {msg.message}
                                         </ReactMarkdown>
                                     </div>
-                                    {/* 消息时间戳 */}
                                     <div style={simpleStyles.timestamp}>{new Date(msg.timestamp).toLocaleTimeString()}</div>
                                 </div>
                             );
                         })}
                     </div>
 
-                    {/* 消息输入和发送 */}
                     <form onSubmit={handleSendMessage} style={simpleStyles.inputForm}>
                         <input
                             type="text"
                             placeholder="输入消息..."
                             value={messageInput}
-                            // 🚨 修复点 #3: 使用新的处理函数 handleInputChange
-                            onChange={handleInputChange} 
+                            onChange={handleInputChange} // 🚨 使用优化的处理函数
                             disabled={isSending}
                             style={simpleStyles.textInput}
                         />
@@ -556,14 +544,12 @@ export default function Home() {
                     </p>
                 </div>
 
-                {/* 右侧在线成员列表 */}
                 <div style={simpleStyles.memberListContainer} className="member-list-container">
                     <strong>在线成员</strong>
                     <hr/>
                     {onlineMembers.length > 0 ? (
                         onlineMembers.map((member, index) => (
                             <div key={index} style={{ marginBottom: '5px', color: member === sender ? '#0070f3' : '#333' }}>
-                                {/* 🚨 修复点 #2: 使用 aiRole 判断 AI 成员 */}
                                 {member} {member === sender ? '(你)' : member === aiRole ? '(AI)' : ''}
                             </div>
                         ))
