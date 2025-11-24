@@ -14,9 +14,6 @@ export default async function handler(req, res) {
     return res.status(400).json({ message: 'Missing required field: room.' });
   }
 
-  // 清空历史是敏感操作，可以根据需求增加权限检查
-  // 如果需要，请确保前端在请求体中传递 sender
-
   try {
     const { ChatMessage, OnlineUser } = await connectToMongo();
 
@@ -36,7 +33,7 @@ export default async function handler(req, res) {
     console.error('Clear History API Error:', error);
 
     res.status(500).json({ 
-        message: '无法清空历史记录，请检查数据库连接和配置。', 
+        message: '清空历史记录失败，请检查数据库连接。',
         details: error.message
     });
   }

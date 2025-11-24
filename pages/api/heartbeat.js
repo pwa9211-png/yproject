@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
-  const { room, username } = req.body;
+  const { room, username } = req.body; 
 
   if (!room || !username) {
     return res.status(400).json({ message: 'Missing required fields: room or username.' });
@@ -19,7 +19,7 @@ export default async function handler(req, res) {
     // 1. 更新或插入用户的活跃时间
     await OnlineUser.updateOne(
       { room: room, sender: username }, // 使用 sender 键名保持一致
-      { $set: { last_seen: new Date() } }, // 使用 last_seen 键名保持一致
+      { $set: { last_seen: new Date() } }, // 使用 last_seen 键名保持一致 (用于 TTL 索引)
       { upsert: true } 
     );
 
