@@ -10,68 +10,9 @@ const ALLOWED_USERS = ['Didy', 'Shane'];
 const AI_SENDER_NAME = '万能助理';
 // -------------------
 
-// --- 颜色分配函数和常量 ---
-// 消息背景色数组，用于分配给不同的非 AI/非自己用户
-const USER_COLORS = [
-    '#4CAF50', // 绿色
-    '#FF9800', // 橙色
-    '#9C27B0', // 紫色
-    '#E91E63', // 粉色
-    '#795548'  // 棕色
-];
-
-/**
- * 根据发送者名称动态获取消息框样式
- * @param {string} senderName - 消息发送者
- * @param {string[]} onlineMembers - 当前在线成员列表
- * @returns {Object} 消息框的动态 style 对象
- */
-function getUserColor(senderName, onlineMembers) {
-    // 1. AI 消息样式：白色背景，靠左
-    if (senderName === AI_SENDER_NAME) {
-        return { 
-            backgroundColor: 'white', 
-            color: '#333', 
-            borderColor: '#e0e0e0',
-            float: 'left', 
-            marginRight: 'auto',
-            borderBottomLeftRadius: '2px', // 尖角在左
-            border: '1px solid #e0e0e0'
-        }; 
-    }
-    
-    // 2. 其他用户消息样式：动态颜色，靠左
-    // 动态分配颜色给其他用户 (排除 AI)
-    const otherMembers = onlineMembers.filter(m => m !== AI_SENDER_NAME);
-    const index = otherMembers.indexOf(senderName);
-    
-    if (index !== -1) {
-        const colorIndex = index % USER_COLORS.length;
-        return {
-            backgroundColor: USER_COLORS[colorIndex],
-            color: 'white', // 彩色背景，白色字体
-            borderColor: USER_COLORS[colorIndex],
-            float: 'left', 
-            marginRight: 'auto',
-            borderBottomLeftRadius: '2px' 
-        };
-    }
-
-    // 3. 默认回退样式（用于找不到发送者的情况，仍靠左）
-    return { 
-        backgroundColor: '#f9f9f9', 
-        color: '#333', 
-        borderColor: '#ccc',
-        float: 'left',
-        marginRight: 'auto',
-        borderBottomLeftRadius: '2px'
-    };
-}
-// -------------------
-
-// --- 样式定义 (simpleStyles) ---
-// 消息的背景和对齐将被动态覆盖，此处保留基础样式
+// 定义一个简单的CSS对象来代替Home.module.css，以提供基本样式
 const simpleStyles = {
+    // 外层容器
     container: {
         minHeight: '100vh',
         padding: '0 0.5rem',
@@ -83,13 +24,7 @@ const simpleStyles = {
         color: '#333',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     },
-    title: {
-        margin: '0',
-        lineHeight: 1.15,
-        fontSize: '2.5rem',
-        textAlign: 'center',
-        marginBottom: '25px',
-    },
+    // 主布局容器
     main: {
         padding: '2rem 0',
         flex: 1,
@@ -100,6 +35,7 @@ const simpleStyles = {
         maxWidth: '1200px', 
         position: 'relative', 
     },
+    // 聊天主区域容器
     chatContainer: {
         flex: 1, 
         marginRight: '30px',
@@ -108,577 +44,553 @@ const simpleStyles = {
         alignItems: 'center',
         maxWidth: '900px',
     },
-    memberListContainer: {
-        width: '200px', 
-        padding: '15px',
-        border: '1px solid #ddd',
-        borderRadius: '8px',
-        position: 'sticky',
-        top: '20px', 
+    title: {
+        margin: '0',
+        lineHeight: 1.15,
+        fontSize: '2.5rem',
+        textAlign: 'center',
+        marginBottom: '25px',
     },
+    // 🚨 修复聊天内容溢出：设置固定高度并启用滚动
     chatArea: {
         width: '100%',
-        height: '600px', 
-        overflowY: 'auto',
         border: '1px solid #ccc',
         borderRadius: '8px',
-        padding: '15px',
-        marginBottom: '15px',
+        padding: '10px',
+        marginBottom: '10px',
+        height: '600px', // 固定高度，确保滚动
+        overflowY: 'auto', // 启用垂直滚动条
         display: 'flex',
-        flexDirection: 'column', // 使消息垂直排列
+        flexDirection: 'column',
     },
-    messageContainer: {
-        marginBottom: '15px',
-        padding: '12px 16px',
-        borderRadius: '12px',
-        clear: 'both',
-        overflow: 'hidden',
-        maxWidth: '85%', 
-        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-        wordBreak: 'break-word', // 确保长单词或URL不溢出
-    },
-    inputArea: {
+    // 聊天消息输入区域容器
+    inputFormContainer: {
         width: '100%',
         display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+    },
+    // 🚨 修复 @ 提及：为下拉框提供定位上下文
+    inputContainer: { 
+        position: 'relative', 
+        display: 'flex',
+        width: '100%',
         marginTop: '10px',
     },
     textInput: {
-        flex: 1,
+        flexGrow: 1, 
         padding: '10px 15px',
         border: '1px solid #ccc',
         borderRadius: '6px 0 0 6px',
         fontSize: '1rem',
         outline: 'none',
+        transition: 'border-color 0.2s',
     },
     sendButton: {
         padding: '10px 20px',
-        backgroundColor: '#0070f3',
-        color: 'white',
         border: 'none',
         borderRadius: '0 6px 6px 0',
+        backgroundColor: '#0070f3',
+        color: 'white',
         cursor: 'pointer',
         fontSize: '1rem',
-        outline: 'none',
+        fontWeight: 'bold',
+        transition: 'background-color 0.2s',
+        minWidth: '80px',
     },
-    errorBox: {
-        color: '#c00',
-        marginBottom: '20px',
-        border: '1px solid #fcc',
-        padding: '10px',
-        borderRadius: '5px',
-        backgroundColor: '#fee',
-        textAlign: 'center',
-        width: '100%',
-    }
+    // 在线成员列表
+    memberListContainer: {
+        width: '200px',
+        padding: '15px',
+        border: '1px solid #ddd',
+        borderRadius: '8px',
+        backgroundColor: '#f9f9f9',
+        minHeight: '200px',
+    },
+    // 消息格式：用户消息（居右，蓝色背景）
+    userMessage: {
+        alignSelf: 'flex-end',
+        backgroundColor: '#d9eaff', 
+        color: '#333',
+        padding: '8px 12px',
+        borderRadius: '15px 15px 5px 15px',
+        maxWidth: '80%',
+        wordBreak: 'break-word',
+        marginBottom: '8px',
+    },
+    // 消息格式：AI/其他消息（居左，灰色背景）
+    aiMessage: {
+        alignSelf: 'flex-start',
+        backgroundColor: '#f0f0f0', 
+        color: '#333',
+        padding: '8px 12px',
+        borderRadius: '15px 15px 15px 5px',
+        maxWidth: '80%',
+        wordBreak: 'break-word',
+        marginBottom: '8px',
+    },
+    messageHeader: {
+        fontSize: '0.8rem',
+        color: '#666',
+        marginBottom: '4px',
+    },
+    // 🚨 修复 @ 提及下拉框样式
+    mentionDropdown: {
+        position: 'absolute',
+        bottom: '100%', // 定位在输入框上方
+        left: 0,
+        width: 'calc(100% - 80px)', // 宽度与输入框对齐 (减去按钮宽度)
+        maxHeight: '200px',
+        overflowY: 'auto',
+        backgroundColor: 'white',
+        border: '1px solid #ddd',
+        borderRadius: '6px 6px 0 0',
+        zIndex: 1000, // 确保它在最前面
+        boxShadow: '0 -2px 5px rgba(0,0,0,0.1)',
+        marginBottom: '5px',
+    },
+    mentionItem: {
+        padding: '8px 15px',
+        cursor: 'pointer',
+    },
+    mentionItemHover: {
+        backgroundColor: '#e6f7ff',
+    },
 };
 
-// Markdown 渲染组件
+// Markdown 组件渲染
 const markdownComponents = {
-    p: ({node, ...props}) => <p style={{margin: '0 0 10px 0', lineHeight: '1.6', whiteSpace: 'pre-wrap'}} {...props} />,
-    ul: ({node, ...props}) => <ul style={{paddingLeft: '20px', margin: '10px 0'}} {...props} />,
-    ol: ({node, ...props}) => <ol style={{paddingLeft: '20px', margin: '10px 0'}} {...props} />,
-    li: ({node, ...props}) => <li style={{marginBottom: '5px'}} {...props} />,
-    code: ({node, inline, ...props}) => {
-        // 对于行内代码和代码块使用不同的样式
-        return inline ? (
-            <code style={{ 
-                backgroundColor: 'rgba(0,0,0,0.05)', 
-                padding: '2px 4px', 
-                borderRadius: '3px',
-                color: '#c7254e'
-            }} {...props} />
-        ) : (
-            <pre style={{ 
-                backgroundColor: '#f4f4f4', 
-                padding: '10px', 
-                borderRadius: '5px', 
+    code: ({node, inline, className, children, ...props}) => {
+        const match = /language-(\w+)/.exec(className || '')
+        return !inline && match ? (
+            <pre style={{
+                backgroundColor: '#f4f4f4',
+                padding: '10px',
+                borderRadius: '5px',
                 overflowX: 'auto',
-                border: '1px solid #ddd'
+                fontSize: '0.9rem',
             }}>
-                <code {...props} />
+                <code className={className} {...props}>
+                    {children}
+                </code>
             </pre>
-        );
+        ) : (
+            <code className={className} {...props}>
+                {children}
+            </code>
+        )
     }
-};
-// -------------------
+}
+
 
 export default function Home() {
-    const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [room, setRoom] = useState('');
     const [sender, setSender] = useState('');
-    const [aiRole, setAiRole] = useState(AI_SENDER_NAME); // AI的当前角色名
-    const [message, setMessage] = useState('');
-    const [chatHistory, setChatHistory] = useState([]);
+    const [aiRole, setAiRole] = useState('万能助理'); // 默认角色
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [inputMessage, setInputMessage] = useState('');
+    const [messages, setMessages] = useState([]);
     const [isSending, setIsSending] = useState(false);
+    const [onlineMembers, setOnlineMembers] = useState([]);
     const [error, setError] = useState('');
-    const [onlineMembers, setOnlineMembers] = useState([]); // 在线成员列表
+    
+    // @ 提及状态
+    const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+    const [filteredMembers, setFilteredMembers] = useState([]);
 
     const chatAreaRef = useRef(null);
 
-    // 滚动到底部
-    const scrollToBottom = () => {
+    // --- 滚动到底部 ---
+    useEffect(() => {
         if (chatAreaRef.current) {
             chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight;
         }
-    };
+    }, [messages]);
 
-    // --- 1. 获取聊天历史和权限检查 ---
-    const fetchHistory = async () => {
-        if (!room || !sender || !isLoggedIn) return;
+    // --- 心跳更新和轮询 ---
+    useEffect(() => {
+        if (!isLoggedIn) return;
 
-        try {
-            // API需要 room 和 sender 参数进行权限检查
-            const res = await fetch(`/api/history?room=${room}&sender=${sender}`);
-            const data = await res.json();
-
-            if (res.ok) {
-                // 如果成功，清空权限错误并设置历史记录
-                setError('');
-                if (data.history) {
-                    setChatHistory(data.history);
-                }
-            } else if (res.status === 403) {
-                // 收到 403 权限错误，清空历史并显示错误信息
-                setChatHistory([]);
-                setError(data.message); 
-            } else {
-                console.error(`Fetch history failed: ${data.message}`);
-            }
-        } catch (err) {
-            console.error(`Fetch history network error:`, err);
-        }
-    };
-
-    // --- 2. 获取在线状态 ---
-    const fetchOnlineStatus = async () => {
-        if (!room || !sender || !isLoggedIn) return;
-
-        try {
-            // API需要 room 和 sender 参数进行权限检查
-            const res = await fetch(`/api/online-status?room=${room}&sender=${sender}`);
-            const data = await res.json();
-
-            if (res.ok) {
-                // 如果成功，清空权限错误并设置在线成员
-                setError('');
-                // 从 OnlineUser 文档中提取 username (即 sender)
-                const members = data.members.map(m => m.username || m.sender); 
-                // 确保 AI 角色也在列表中，但避免重复
-                if (!members.includes(AI_SENDER_NAME)) {
-                    members.push(AI_SENDER_NAME);
-                }
-                setOnlineMembers(members);
-            } else if (res.status === 403) {
-                // 收到 403 权限错误，清空在线列表并显示错误信息
-                setOnlineMembers([]);
-                setError(data.message); 
-            } else {
-                console.error(`Fetch online status failed: ${data.message}`);
-            }
-        } catch (err) {
-            console.error(`Fetch online status network error:`, err);
-        }
-    };
-
-
-    // --- 3. 心跳更新 ---
-    const sendHeartbeat = async () => {
-        if (!room || !sender || !isLoggedIn) return;
-
-        try {
-            const res = await fetch('/api/heartbeat', {
+        const sendHeartbeat = async () => {
+            await fetch('/api/heartbeat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // 注意：heartbeat API 需使用 username 字段
-                body: JSON.stringify({ room: room, username: sender }) 
+                body: JSON.stringify({ room, username: sender }),
             });
+        };
 
-            if (!res.ok) {
-                console.error('Heartbeat failed', await res.json());
-            }
-        } catch (err) {
-            console.error('Heartbeat network error', err);
+        const fetchAllData = () => {
+            fetchHistory();
+            fetchMembers();
+            sendHeartbeat();
+        };
+
+        // 立即获取一次数据，然后设置定时器
+        fetchAllData(); 
+        const intervalId = setInterval(fetchAllData, 3000); // 3秒更新一次
+
+        // 组件卸载时清除定时器
+        return () => clearInterval(intervalId);
+    }, [isLoggedIn, room, sender]);
+
+
+    // --- 权限检查 ---
+    const checkPermission = (currentRoom, currentSender) => {
+        if (currentRoom === RESTRICTED_ROOM && !ALLOWED_USERS.includes(currentSender)) {
+            setError(`对不起，房间 ${RESTRICTED_ROOM} 是限制房间。您的身份（${currentSender}）不被允许进入。请换个房间或身份。`);
+            return false;
         }
-    };
-
-    // --- 4. 清空历史记录 ---
-    const clearHistory = async () => {
-        if (!room || !sender || isSending) return;
-        
-        const confirmClear = window.confirm(`确定要清空房间 ${room} 的所有对话记录和在线状态吗？`);
-        if (!confirmClear) return;
-
-        setIsSending(true);
-        try {
-            const res = await fetch('/api/clear-history', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ room })
-            });
-
-            const data = await res.json();
-            if (res.ok) {
-                alert(`清空成功: ${data.message}`);
-                setChatHistory([]); // 清空前端显示
-                fetchOnlineStatus(); // 刷新在线列表
-            } else {
-                alert(`清空失败: ${data.message}`);
-            }
-        } catch (error) {
-            alert('清空操作失败，请检查网络或日志。');
-            console.error('Clear history error:', error);
-        } finally {
-            setIsSending(false);
-        }
-    };
-
-    // --- 5. 导出 HTML ---
-    const exportHistory = () => {
-        if (chatHistory.length === 0) {
-            alert('没有历史记录可供导出。');
-            return;
-        }
-        
-        // 使用动态颜色和对齐逻辑来生成 HTML 内容
-        const formattedMessages = chatHistory.map(msg => {
-            const isCurrentUser = msg.sender === sender;
-            const isAI = msg.sender === AI_SENDER_NAME;
-            
-            let dynamicStyle;
-            if (isCurrentUser) {
-                dynamicStyle = { backgroundColor: '#0070f3', color: 'white', float: 'right', marginLeft: 'auto', borderBottomRightRadius: '2px' };
-            } else {
-                dynamicStyle = getUserColor(msg.sender, onlineMembers); // 调用相同的颜色函数
-            }
-
-            const senderName = msg.sender;
-            
-            return `
-                <div style="
-                    margin-bottom: 15px; 
-                    padding: 12px 16px; 
-                    border-radius: 12px; 
-                    max-width: 85%; 
-                    float: ${isCurrentUser ? 'right' : 'left'}; 
-                    clear: both; 
-                    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-                    background-color: ${dynamicStyle.backgroundColor};
-                    color: ${dynamicStyle.color};
-                    border: ${isAI ? '1px solid #e0e0e0' : 'none'};
-                    margin-left: ${isCurrentUser ? 'auto' : '0'};
-                    margin-right: ${isCurrentUser ? '0' : 'auto'};
-                    border-bottom-right-radius: ${isCurrentUser ? '2px' : '12px'};
-                    border-bottom-left-radius: ${isCurrentUser ? '12px' : '2px'};
-                ">
-                    ${!isCurrentUser ? `
-                        <strong style="
-                            display: block; 
-                            margin-bottom: 5px; 
-                            color: ${isAI ? '#0070f3' : (dynamicStyle.color === 'white' ? 'white' : '#333')};
-                        ">${senderName}:</strong>
-                    ` : ''}
-                    <div style="white-space: pre-wrap; color: ${dynamicStyle.color}; text-align: left;">${msg.message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
-                </div>
-            `;
-        }).join('');
-
-        const htmlContent = `
-            <!DOCTYPE html>
-            <html lang="zh-CN">
-            <head>
-                <meta charset="UTF-8">
-                <title>聊天记录 - 房间 ${room}</title>
-            </head>
-            <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; border: 1px solid #ddd;">
-                <h2>房间 ${room} 聊天记录</h2>
-                <p>导出用户: ${sender} | AI 角色: ${aiRole} | 导出时间: ${new Date().toLocaleString()}</p>
-                <div style="width: 100%; border: 1px solid #ccc; padding: 15px; margin-top: 20px;">
-                    ${formattedMessages}
-                </div>
-            </body>
-            </html>
-        `;
-
-        const blob = new Blob([htmlContent], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `chat_history_room_${room}_${new Date().toISOString().slice(0, 10)}.html`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        setError('');
+        return true;
     };
 
 
-    // --- 6. 消息发送逻辑 ---
-    const handleSend = async (e) => {
-        e.preventDefault();
-        if (!message.trim() || isSending || !room || !sender || !isLoggedIn) return;
-
-        const messageToSend = message.trim();
-        setMessage(''); 
-        setIsSending(true);
-
-        try {
-            const res = await fetch('/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ room, sender, message: messageToSend, aiRole })
-            });
-
-            const data = await res.json();
-
-            if (res.ok) {
-                // 发送成功，强制刷新历史记录来更新 UI
-                await fetchHistory(); 
-            } else if (res.status === 403) {
-                setError(data.message); // 显示权限错误
-            } else {
-                setError(data.message || '消息发送失败');
-            }
-
-        } catch (err) {
-            setError('网络错误，消息发送失败');
-            console.error('Send message network error:', err);
-        } finally {
-            setIsSending(false);
-        }
-    };
-    
-    // --- 7. 登录处理逻辑 ---
+    // --- 加入房间 ---
     const handleLogin = (e) => {
         e.preventDefault();
-        const trimmedRoom = room.trim();
-        const trimmedSender = sender.trim();
+        if (!room.trim() || !sender.trim()) {
+            setError('房间号和您的称呼不能为空。');
+            return;
+        }
 
-        if (trimmedRoom && trimmedSender) {
-            // 权限检查 (前端模糊化错误)
-            if (trimmedRoom === RESTRICTED_ROOM && !ALLOWED_USERS.includes(trimmedSender)) {
-                // 后端 API 会做真正的权限检查，这里只是为了快速防止
-                setError(`房间 ${trimmedRoom} 需要特殊权限，请确认您的昵称。`);
-                return;
-            }
-
+        if (checkPermission(room, sender)) {
             setIsLoggedIn(true);
-            setError(''); // 清空可能的错误信息
-            
-            // 立即发起首次心跳和获取历史记录
-            sendHeartbeat();
+            // 登录成功后，AI 角色名默认等于 AI_SENDER_NAME
+            setAiRole(AI_SENDER_NAME); 
             fetchHistory();
-            fetchOnlineStatus();
-
-        } else {
-            setError('房间号和昵称不能为空。');
+            fetchMembers();
         }
     };
 
-    // --- 8. 轮询效果 ---
-    useEffect(() => {
-        let historyInterval, heartbeatInterval, onlineStatusInterval;
-
-        if (isLoggedIn && !error) {
-            // 每 2 秒获取一次历史记录和在线状态
-            historyInterval = setInterval(fetchHistory, 2000); 
-            onlineStatusInterval = setInterval(fetchOnlineStatus, 2000); 
-            // 每 30 秒发送一次心跳
-            heartbeatInterval = setInterval(sendHeartbeat, 30000); 
+    // --- 获取历史记录 ---
+    const fetchHistory = async () => {
+        if (!room || !sender) return;
+        try {
+            const response = await fetch(`/api/history?room=${room}&sender=${sender}`);
+            const data = await response.json();
+            if (data.success) {
+                // 确保数据结构一致
+                const formattedHistory = data.history.map(msg => ({
+                    ...msg,
+                    text: msg.message, // 统一使用 text 字段作为内容
+                    role: msg.role || (msg.sender === AI_SENDER_NAME ? 'model' : 'user')
+                }));
+                setMessages(formattedHistory);
+            } else {
+                setError(data.message);
+                if (data.message.includes('限制房间')) {
+                    setIsLoggedIn(false); // 权限不足则退出登录状态
+                }
+            }
+        } catch (err) {
+            console.error('获取历史记录失败:', err);
+            // 忽略常见网络错误，保持轮询
         }
+    };
 
-        // 清理函数
-        return () => {
-            if (historyInterval) clearInterval(historyInterval);
-            if (heartbeatInterval) clearInterval(heartbeatInterval);
-            if (onlineStatusInterval) clearInterval(onlineStatusInterval);
-        };
-    }, [isLoggedIn, room, sender, error]); // 依赖 isLoggedIn, room, sender 和 error
+    // --- 获取在线成员 ---
+    const fetchMembers = async () => {
+        if (!room || !sender) return;
+        try {
+            const response = await fetch(`/api/online-status?room=${room}&sender=${sender}`);
+            const data = await response.json();
+            if (data.success) {
+                // 确保 AI 角色名总是在线列表中，用于 @ 提及
+                let members = data.members;
+                if (!members.includes(AI_SENDER_NAME)) {
+                    members = [AI_SENDER_NAME, ...members];
+                }
+                setOnlineMembers(members);
+                
+                // 更新 @ 提及的筛选列表（如果用户正在输入 @）
+                if (inputMessage.includes('@')) {
+                    const lastWord = inputMessage.split(/\s+/).pop();
+                    if (lastWord.startsWith('@')) {
+                        const mentionQuery = lastWord.substring(1).toLowerCase();
+                        setFilteredMembers(members.filter(m => 
+                            m !== sender && m.toLowerCase().includes(mentionQuery)
+                        ));
+                        setShowMentionDropdown(true);
+                        return; // 不再执行默认的隐藏逻辑
+                    }
+                }
+                setShowMentionDropdown(false);
 
-    // 消息历史更新后，自动滚动到底部
-    useEffect(() => {
-        scrollToBottom();
-    }, [chatHistory]);
+            } else {
+                // 权限不足错误，但仍继续保持登录状态，只是不显示成员
+                if (!data.message.includes('限制房间')) { 
+                    console.error('获取在线成员失败:', data.message);
+                }
+            }
+        } catch (err) {
+            console.error('获取在线成员失败:', err);
+        }
+    };
 
-    // 导出文件时使用的简单输入处理
+    // --- 清空历史记录 ---
+    const handleClearHistory = async () => {
+        if (!window.confirm('确定要清除当前房间的所有聊天记录吗？此操作不可逆。')) return;
+
+        try {
+            const response = await fetch('/api/clear-history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ room }),
+            });
+            const data = await response.json();
+            if (data.success) {
+                alert('聊天历史记录已清除！');
+                setMessages([]);
+                fetchMembers(); // 刷新在线列表
+            } else {
+                alert('清除历史记录失败: ' + data.message);
+            }
+        } catch (err) {
+            alert('网络错误，无法清除历史记录。');
+        }
+    };
+
+    // --- 处理输入变更 (包含 @ 逻辑) ---
     const handleInputChange = (e) => {
-        setMessage(e.target.value);
+        const newValue = e.target.value;
+        setInputMessage(newValue);
+
+        // 检查是否正在输入 @ 提及
+        const lastWord = newValue.split(/\s+/).pop();
+        if (lastWord.startsWith('@')) {
+            const mentionQuery = lastWord.substring(1).toLowerCase();
+            const filtered = onlineMembers.filter(m => 
+                m !== sender && m.toLowerCase().includes(mentionQuery)
+            );
+            setFilteredMembers(filtered);
+            setShowMentionDropdown(filtered.length > 0);
+        } else {
+            setShowMentionDropdown(false);
+        }
     };
 
-    // ------------------- 渲染逻辑 -------------------
+    // --- 处理选择 @ 成员 ---
+    const handleSelectMention = (member) => {
+        const words = inputMessage.split(/\s+/);
+        words.pop(); // 移除正在输入的 @ 词
+        words.push(`@${member}`);
+        const newText = words.join(' ') + ' '; // 确保选择后有一个空格
+        setInputMessage(newText);
+        setShowMentionDropdown(false);
+        // 重新聚焦到输入框
+        document.querySelector('input[type="text"]').focus();
+    };
+
+    // --- 发送消息 ---
+    const handleSendMessage = async (e) => {
+        e.preventDefault();
+        if (!inputMessage.trim() || isSending) return;
+
+        setIsSending(true);
+        const userMessage = inputMessage.trim();
+        
+        // --- 1. 检查和处理 /设定角色 命令 ---
+        if (userMessage.startsWith('/设定角色')) {
+            const newRole = userMessage.substring(5).trim();
+            if (newRole) {
+                // 仅在前端更新角色状态，让 AI 在 chat.js 中接收并确认
+                setAiRole(newRole); 
+
+                // 在本地显示用户消息
+                setMessages(prev => [...prev, { 
+                    sender, 
+                    text: userMessage, 
+                    role: 'user', 
+                    timestamp: new Date().toISOString() 
+                }]);
+                setInputMessage('');
+
+                // 立即触发 AI 回复，以便它确认角色设定成功
+                // 逻辑交给后端的 chat.js 处理，它会识别 /设定角色 命令
+            } else {
+                alert('请在 /设定角色 后面添加新的角色描述。');
+            }
+        } 
+        
+        // --- 2. 处理普通聊天消息或角色设定 (发送给 API) ---
+        try {
+            // 在本地显示用户消息
+            setMessages(prev => [...prev, { 
+                sender, 
+                text: userMessage, 
+                role: 'user', 
+                timestamp: new Date().toISOString() 
+            }]);
+            setInputMessage('');
+
+
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    room, 
+                    sender, 
+                    message: userMessage, 
+                    aiRole: aiRole 
+                }),
+            });
+            
+            const data = await response.json();
+
+            if (!data.success) {
+                setError(data.message);
+            }
+            
+            // AI 回复会在 fetchHistory 轮询中拉取，无需在此处手动添加
+        } catch (err) {
+            console.error('发送消息失败:', err);
+            setError('发送消息失败，请检查网络或后端服务。');
+            // 消息发送失败，从本地移除刚刚添加的消息
+            setMessages(prev => prev.slice(0, -1));
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+
+    // --- 渲染组件 ---
 
     if (!isLoggedIn) {
         return (
-            <div style={{ ...simpleStyles.container, justifyContent: 'flex-start', paddingTop: '100px' }}>
+            <div style={simpleStyles.container}>
                 <Head>
-                    <title>加入聊天室</title>
+                    <title>AI 聊天室</title>
                 </Head>
-                <div style={{ width: '350px', padding: '30px', border: '1px solid #ddd', borderRadius: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                    <h1 style={simpleStyles.title}>AI 智能聊天室</h1>
-                    <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                <div style={simpleStyles.chatContainer}>
+                    <h1 style={simpleStyles.title}>AI 聊天室 - 登录</h1>
+                    <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '15px', width: '300px' }}>
                         <input
                             type="text"
-                            placeholder="输入房间号 (例如: 1)"
+                            placeholder="房间号 (例: 1, 2)"
                             value={room}
-                            onChange={(e) => setRoom(e.target.value)}
-                            style={{ padding: '10px', border: '1px solid #ccc', borderRadius: '5px', fontSize: '1rem' }}
+                            onChange={(e) => { setRoom(e.target.value); setError(''); }}
+                            style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
                         />
                         <input
                             type="text"
-                            placeholder="输入您的昵称 (例如: Didy)"
+                            placeholder="您的称呼 (例: 小王)"
                             value={sender}
-                            onChange={(e) => setSender(e.target.value)}
-                            style={{ padding: '10px', border: '1px solid #ccc', borderRadius: '5px', fontSize: '1rem' }}
+                            onChange={(e) => { setSender(e.target.value); setError(''); }}
+                            style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
                         />
-                        <input
-                            type="text"
-                            placeholder={`AI 当前角色名 (例如: ${AI_SENDER_NAME})`}
-                            value={aiRole}
-                            onChange={(e) => setAiRole(e.target.value)}
-                            style={{ padding: '10px', border: '1px solid #ccc', borderRadius: '5px', fontSize: '1rem' }}
-                        />
-                        {error && <div style={simpleStyles.errorBox}>{error}</div>}
-                        <button type="submit" style={{ padding: '10px', backgroundColor: '#0070f3', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '1rem' }}>
+                        <button type="submit" style={{ padding: '10px', backgroundColor: '#0070f3', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
                             加入房间
                         </button>
                     </form>
+                    {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
                 </div>
             </div>
         );
     }
 
+    // 聊天窗口主体
     return (
         <div style={simpleStyles.container}>
             <Head>
-                <title>房间 {room} - {sender}</title>
+                <title>房间 {room} - AI 聊天室</title>
             </Head>
 
             <div style={simpleStyles.main} className="main-layout">
+                {/* 左侧聊天窗口 */}
                 <div style={simpleStyles.chatContainer} className="chat-container">
-                    <h1 style={simpleStyles.title}>
-                        房间 <span style={{ color: '#0070f3' }}>{room}</span>
-                        <span style={{ fontSize: '1.2rem', marginLeft: '20px', fontWeight: 'normal', color: '#666' }}>
-                            (昵称: {sender}, AI 角色: {aiRole})
-                        </span>
-                    </h1>
+                    <h1 style={simpleStyles.title}>房间 {room} - {sender}</h1>
+                    <p>AI 角色: **{aiRole}** <button onClick={handleClearHistory} style={{ marginLeft: '10px', padding: '5px 10px', fontSize: '0.8rem', cursor: 'pointer' }}>清空历史</button></p>
                     
-                    {error && <div style={simpleStyles.errorBox}>{error}</div>}
+                    {error && <p style={{ color: 'red', marginBottom: '10px' }}>{error}</p>}
 
-                    {/* 消息历史区域 */}
-                    <div style={simpleStyles.chatArea} ref={chatAreaRef} className="chat-area">
-                        {chatHistory && chatHistory.map((msg, index) => {
-                            // 动态计算样式和对齐
-                            const isCurrentUser = msg.sender === sender;
-                            const isAI = msg.sender === AI_SENDER_NAME;
-
-                            let dynamicStyle;
-
-                            if (isCurrentUser) {
-                                // 自己的消息：蓝色背景，靠右
-                                dynamicStyle = { 
-                                    backgroundColor: '#0070f3', 
-                                    color: 'white', 
-                                    float: 'right', 
-                                    marginLeft: 'auto', 
-                                    borderBottomRightRadius: '2px', // 尖角在右
-                                }; 
-                            } else {
-                                // AI 或其他用户的消息：调用颜色函数，靠左
-                                dynamicStyle = getUserColor(msg.sender, onlineMembers); 
-                            }
-
-                            return (
-                                <div key={index} style={{
-                                    ...simpleStyles.messageContainer,
-                                    ...dynamicStyle, // 应用动态样式
-                                }}
-                                className="message-container" 
-                                >
-                                    {/* 非自己的消息，显示发送者名称 */}
-                                    {!isCurrentUser && 
-                                        <strong style={{ 
-                                            display: 'block', 
-                                            marginBottom: '5px', 
-                                            // AI (白色背景) 用蓝色字体，其他用户 (彩色背景) 用白色字体
-                                            color: isAI ? '#0070f3' : (dynamicStyle.color === 'white' ? 'white' : '#333') 
-                                        }}>
-                                            {msg.sender}:
-                                        </strong>
-                                    }
-                                    
-                                    <div style={{ wordWrap: 'break-word', marginTop: isCurrentUser ? '0' : '5px' }}>
-                                        <ReactMarkdown 
-                                            children={msg.message} 
-                                            remarkPlugins={[remarkGfm]} 
-                                            components={markdownComponents} 
-                                        />
+                    {/* 🚨 修复对话格式和滚动：chatArea */}
+                    <div style={simpleStyles.chatArea} ref={chatAreaRef}>
+                        {messages.length === 0 ? (
+                            <p style={{ color: '#aaa', textAlign: 'center', marginTop: '100px' }}>暂无消息，开始聊天吧！</p>
+                        ) : (
+                            messages.map((msg, index) => {
+                                // 确定消息样式
+                                const isUser = msg.sender === sender;
+                                const messageStyle = isUser ? simpleStyles.userMessage : simpleStyles.aiMessage;
+                                
+                                // 格式化时间
+                                const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '';
+                                
+                                return (
+                                    <div key={index} style={messageStyle}>
+                                        <div style={simpleStyles.messageHeader}>
+                                            <strong style={{ color: isUser ? '#0070f3' : '#a020f0' }}>{msg.sender}</strong> 
+                                            <span style={{ marginLeft: '10px', color: '#999' }}>{timestamp}</span>
+                                        </div>
+                                        <div className="chat-message-content">
+                                            {/* 使用 ReactMarkdown 渲染内容，支持代码块和 markdown 格式 */}
+                                            <ReactMarkdown 
+                                                remarkPlugins={[remarkGfm]} 
+                                                components={markdownComponents}
+                                            >
+                                                {msg.text}
+                                            </ReactMarkdown>
+                                        </div>
                                     </div>
+                                );
+                            })
+                        )}
+                    </div>
+
+                    {/* 🚨 修复 @ 提及：输入表单区域 */}
+                    <div style={simpleStyles.inputFormContainer}>
+                        <div style={simpleStyles.inputContainer}>
+                            {/* 提及下拉框 */}
+                            {showMentionDropdown && filteredMembers.length > 0 && (
+                                <div style={simpleStyles.mentionDropdown}>
+                                    {filteredMembers.map(member => (
+                                        <div 
+                                            key={member} 
+                                            style={simpleStyles.mentionItem} 
+                                            // 简单的 hover 效果
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = simpleStyles.mentionItemHover.backgroundColor}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = simpleStyles.mentionItem.backgroundColor}
+                                            onClick={() => handleSelectMention(member)}
+                                        >
+                                            @{member} {member === AI_SENDER_NAME ? '(AI)' : ''}
+                                        </div>
+                                    ))}
                                 </div>
-                            );
-                        })}
-                    </div>
+                            )}
 
-                    {/* 输入区域 */}
-                    <form onSubmit={handleSend} style={simpleStyles.inputArea}>
-                        <input
-                            type="text"
-                            placeholder="输入消息，@万能助理 提问，或 /设定角色 [新角色描述]"
-                            value={message}
-                            onChange={handleInputChange} 
-                            disabled={isSending || !!error}
-                            style={simpleStyles.textInput}
-                        />
-                        <button type="submit" disabled={isSending || !!error} style={simpleStyles.sendButton}>
-                            {isSending ? '发送中...' : '发送'}
-                        </button>
-                    </form>
-
-                    <div style={{ marginTop: '15px', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: '#666' }}>
-                        <p style={{ margin: 0, lineHeight: '1.6' }}>
-                            * AI 仅在被 @ 时回复 (例如: @{AI_SENDER_NAME} 你好)
-                            <br/>
-                            * 使用 `/设定角色 [新角色描述]` 命令可以动态切换 AI 身份。
-                        </p>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <button onClick={clearHistory} disabled={isSending || !!error} style={{ 
-                                padding: '8px 15px', 
-                                backgroundColor: '#f44336', 
-                                color: 'white', 
-                                border: 'none', 
-                                borderRadius: '5px', 
-                                cursor: 'pointer' 
-                            }}>
-                                清空对话
-                            </button>
-                            <button onClick={exportHistory} disabled={isSending || !!error} style={{ 
-                                padding: '8px 15px', 
-                                backgroundColor: '#2196f3', 
-                                color: 'white', 
-                                border: 'none', 
-                                borderRadius: '5px', 
-                                cursor: 'pointer' 
-                            }}>
-                                导出 HTML
-                            </button>
+                            <form onSubmit={handleSendMessage} style={{ display: 'flex', width: '100%' }}>
+                                <input
+                                    type="text"
+                                    value={inputMessage}
+                                    onChange={handleInputChange} 
+                                    disabled={isSending}
+                                    placeholder={`在房间 ${room} 中发言...`}
+                                    style={simpleStyles.textInput}
+                                />
+                                <button type="submit" disabled={isSending} style={simpleStyles.sendButton}>
+                                    {isSending ? '发送中...' : '发送'}
+                                </button>
+                            </form>
                         </div>
+
+                        <p style={{ marginTop: '10px', fontSize: '0.8rem', color: '#666' }}>
+                            * AI 仅在被 **@{AI_SENDER_NAME}** 提及或使用 **`/设定角色`** 命令时回复。
+                        </p>
                     </div>
+
+
                 </div>
 
                 {/* 右侧在线成员列表 */}
                 <div style={simpleStyles.memberListContainer} className="member-list-container">
-                    <strong>在线成员</strong>
+                    <strong>在线成员 ({onlineMembers.length})</strong>
                     <hr/>
                     {onlineMembers.length > 0 ? (
-                        onlineMembers.map((member, index) => {
-                            const isCurrentUser = member === sender;
-                            const isAI = member === AI_SENDER_NAME;
-                            const statusColor = isCurrentUser ? '#0070f3' : (isAI ? '#4CAF50' : '#333');
-                            const displayName = member; 
-
-                            return (
-                                <div key={index} style={{ marginBottom: '5px', color: statusColor, fontWeight: isCurrentUser ? 'bold' : 'normal' }}>
-                                    {displayName} {isCurrentUser ? '(你)' : isAI ? '(AI)' : ''}
-                                </div>
-                            );
-                        })
+                        onlineMembers.map((member, index) => (
+                            <div key={index} style={{ marginBottom: '5px', color: member === sender ? '#0070f3' : '#333' }}>
+                                {member} {member === sender ? '(你)' : member === AI_SENDER_NAME ? '(AI)' : ''}
+                            </div>
+                        ))
                     ) : (
                         <div style={{ color: '#aaa', fontSize: '0.9rem' }}>正在加载或无其他成员...</div>
                     )}
@@ -687,5 +599,3 @@ export default function Home() {
         </div>
     );
 }
-
-// EOF

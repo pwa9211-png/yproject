@@ -3,7 +3,6 @@
 import { connectToMongo } from '../../lib/mongodb'; 
 
 export default async function handler(req, res) {
-  // 仅接受 POST 请求
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
