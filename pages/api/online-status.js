@@ -16,32 +16,29 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, message: 'Missing required fields: room or sender.' });
     }
 
-    // --- 🚨 权限控制逻辑 START ---
-    if (room === RESTRICTED_ROOM) {
-        if (!ALLOWED_USERS.includes(sender)) {
-            // 立即拒绝非白名单用户查看在线列表
-            return res.status(403).json({
-                success: false,
-                message: `房间 ${RESTRICTED_ROOM} 是限制房间。您无权查看在线成员。`,
-                members: [] 
-            });
-        }
+    // --- 权限控制逻辑 ---
+    if (room === RESTRICTED_ROOM && !ALLOWED_USERS.includes(sender)) {
+        return res.status(403).json({
+            success: false,
+            message: `房间 ${RESTRICTED_ROOM} 是限制房间。您无权查看在线成员。`,
+            members: [] 
+        });
     }
     // --- 权限控制逻辑 END ---
 
     try {
         const { OnlineUser } = await connectToMongo();
 
-        // 查找在过去 60 秒内更新过心跳的用户
-        const members = await OnlineUser.find({ room, last_seen: { $gt: new Date(Date.now() - 60000) } }).toArray();
+        // 查找在过去 60 秒内更新过心跳的用户 (TTL 索引的范围)
+        const membersDocs = await OnlineUser.find({ room }).toArray();
+        
+        // 提取用户名
+        const members = membersDocs.map(doc => doc.sender);
 
-        // 返回 sender 列表
-        const memberList = members.map(m => ({ sender: m.sender }));
-
-        return res.status(200).json({ success: true, members: memberList });
+        res.status(200).json({ success: true, members });
 
     } catch (error) {
         console.error('Online Status API Error:', error);
-        return res.status(500).json({ success: false, message: 'Internal Server Error' });
+        res.status(500).json({ success: false, message: 'Internal Server Error', details: error.message });
     }
 }
