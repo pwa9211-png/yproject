@@ -1,11 +1,11 @@
 // pages/api/chat.js
 
 import { connectToMongo } from '../../lib/mongodb'; 
-import { GoogleGenAI } from '../../lib/ai'; 
+import { GoogleGenAI } from '../../lib/ai'; // 确保正确导入 AI 客户端
 
 const RESTRICTED_ROOM = '2';
 const ALLOWED_USERS = ['Didy', 'Shane']; 
-const AI_SENDER_NAME = '万能助理';
+const AI_SENDER_NAME = '万能助理'; // 必须与前端保持一致
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -22,12 +22,15 @@ export default async function handler(req, res) {
         });
     }
 
-    // --- 权限控制逻辑 ---
-    if (room === RESTRICTED_ROOM && !ALLOWED_USERS.includes(sender)) {
-        return res.status(403).json({
-            success: false,
-            message: `房间 ${RESTRICTED_ROOM} 是限制房间。您的身份不被允许发送消息。`,
-        });
+    // --- 权限控制逻辑 START ---
+    if (room === RESTRICTED_ROOM) {
+        if (!ALLOWED_USERS.includes(sender)) {
+            // 如果用户不在白名单内，拒绝操作
+            return res.status(403).json({
+                success: false,
+                message: `房间 ${RESTRICTED_ROOM} 是限制房间。您的身份不被允许发送消息。`,
+            });
+        }
     }
     // --- 权限控制逻辑 END ---
 
@@ -36,9 +39,40 @@ export default async function handler(req, res) {
 
         const timestamp = new Date();
 
+        // 0. 检查是否是 /设定角色 命令 (如果命令被前端处理了，后端也需要处理)
+        const roleCommandMatch = message.match(/^\/设定角色\s+(.+)/);
+        if (roleCommandMatch) {
+            // 如果是 /设定角色 命令，只保存用户消息，AI 回复已在前端处理，此处不进行 AI 调用
+            // 确保用户消息已保存
+            const userMessageDoc = { 
+                room,
+                sender, 
+                message, 
+                role: 'user', 
+                timestamp 
+            };
+            await ChatMessage.insertOne(userMessageDoc);
+            
+            // 记录 AI 角色设定成功的消息
+            const aiRoleMessage = {
+                room,
+                sender: AI_SENDER_NAME,
+                message: `角色设定命令已接收。新的 AI 身份是：**${roleCommandMatch[1].trim()}**。`,
+                role: 'model',
+                timestamp: new Date()
+            };
+            await ChatMessage.insertOne(aiRoleMessage);
+
+            return res.status(200).json({ 
+                success: true, 
+                message: 'User message and role change recorded.', 
+                ai_reply: aiRoleMessage.message // 返回 AI 的确认消息，让前端显示
+            });
+        }
+
         // --- 1. 保存用户消息到数据库 ---
         const userMessageDoc = { 
-            room,
+            room, 
             sender, 
             message, 
             role: 'user', 
@@ -46,20 +80,20 @@ export default async function handler(req, res) {
         };
         await ChatMessage.insertOne(userMessageDoc);
 
-        // --- 2. 更新用户心跳 (确保用户在线) ---
+        // --- 2. 更新用户心跳 ---
         await OnlineUser.updateOne(
-            { room: room, sender: sender }, 
-            { $set: { last_seen: new Date() } }, 
+            { room, sender },
+            { $set: { last_seen: new Date() } },
             { upsert: true }
         );
 
-        // --- 3. 检查是否需要 AI 回复 (提及 AI 或 /设定角色 命令) ---
-        // AI 提及模式: @AI_SENDER_NAME 或 /设定角色
-        const aiMentionPattern = new RegExp(`@${AI_SENDER_NAME.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1")}\\b`, 'i');
+        // --- 3. 检查是否提及 AI ---
+        // 修正正则，确保匹配 @万能助理 或 @万能助理 (AI 的角色名可能包含空格)
+        const aiMentionPattern = new RegExp(`@${AI_SENDER_NAME.replace(/([.*+?^=!:${}()|[\]/\\])/g, '\\$1')}`, 'i');
+        const shouldReply = aiMentionPattern.test(message);
 
-        const isAIMentioned = aiMentionPattern.test(message) || message.startsWith('/设定角色');
-
-        if (!isAIMentioned) {
+        if (!shouldReply) {
+            // 如果 AI 未被提及，仅保存用户消息后返回
             return res.status(200).json({ 
                 success: true, 
                 message: 'User message saved.', 
@@ -68,14 +102,15 @@ export default async function handler(req, res) {
         }
         
         // --- 4. 获取最近的聊天历史作为上下文 ---
+        // 获取房间的最近 10 条消息作为上下文
         const historyDocs = await ChatMessage.find({ room })
             .sort({ timestamp: -1 })
-            .limit(10) // 限制最近 10 条消息作为上下文
+            .limit(10)
             .toArray();
 
-        // 格式化历史记录为 AI 格式 (从旧到新)
+        // 格式化历史记录为 AI 格式 (Kimi/Moonshot/OpenAI 兼容)
         const context = historyDocs.reverse().map(doc => ({
-            role: doc.role === 'user' ? 'user' : 'model', 
+            role: doc.role === 'model' ? 'model' : 'user', // 这里使用 'model' 保持与 chat.js 的约定，ai.js 中会转为 'assistant'
             text: doc.message
         })).filter(m => m.text);
 
@@ -89,7 +124,8 @@ export default async function handler(req, res) {
         // --- 6. 保存 AI 回复到数据库 ---
         const aiMessageDoc = { 
             room,
-            sender: aiRole, // 使用当前的角色名作为发送者
+            // 确保 AI 的昵称是常量，而不是 aiRole
+            sender: AI_SENDER_NAME, 
             message: aiReply, 
             role: 'model', 
             timestamp: new Date() 
@@ -103,7 +139,11 @@ export default async function handler(req, res) {
         });
 
     } catch (error) {
-        console.error('Chat API Error:', error);
-        res.status(500).json({ success: false, message: 'Internal Server Error', details: error.message });
+        console.error('Chat API Fatal Error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Internal server error during chat processing.',
+            details: error.message
+        });
     }
 }
