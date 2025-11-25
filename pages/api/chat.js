@@ -1,7 +1,7 @@
-// pages/api/chat.js (新增部署验证标记)
+// pages/api/chat.js (移除部署验证标记)
 
 import { connectToMongo } from '../../lib/mongodb'; 
-import { GoogleGenAI } from '../../lib/ai'; // 确保正确导入 AI 客户端
+import { GoogleGenAI } from '../../lib/ai'; 
 
 // --- 权限常量定义 (保持一致) ---
 const RESTRICTED_ROOM = '2';
@@ -93,12 +93,11 @@ export default async function handler(req, res) {
         aiReply = await GoogleGenAI(context, aiRole);
         
         // **********************************************
-        // 🚨 部署验证标记：请注意 AI 回复是否包含此标记
+        // 🚨 部署验证标记已移除
         // **********************************************
-        aiReply = `[联网部署验证-V3.1] ${aiReply}`; 
         
         // 6. 保存 AI 回复到数据库
-        const finalAiSender = AI_SENDER_NAME; // 使用默认的 AI 昵称
+        const finalAiSender = AI_SENDER_NAME; 
 
         const aiMessageDoc = { 
             room,
