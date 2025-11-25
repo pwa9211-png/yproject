@@ -10,7 +10,7 @@ const ALLOWED_USERS = ['Didy', 'Shane'];
 const AI_SENDER_NAME = '万能助理'; 
 const AI_ROLE_DEFAULT = '万能助理'; 
 
-// --- Markdown 组件配置 (保持不变) ---
+// --- Markdown 组件配置 ---
 const markdownComponents = {
     a: props => <a href={props.href} target="_blank" rel="noopener noreferrer">{props.children}</a>,
     code: ({node, inline, className, children, ...props}) => {
@@ -24,9 +24,8 @@ const markdownComponents = {
     }
 }
 
-// --- 样式定义 (包含新增的菜单样式) ---
+// --- 样式定义 ---
 const simpleStyles = {
-    // ... (保持你原有的其他样式不变，为了节省篇幅省略部分，请保留原文件中的 styles) ...
     container: { minHeight: '100vh', padding: '0 0.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', backgroundColor: 'white', color: '#333', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif', },
     title: { margin: '0', lineHeight: 1.15, fontSize: '2.5rem', textAlign: 'center', marginBottom: '25px', },
     main: { padding: '2rem 0', flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'flex-start', width: '100%', maxWidth: '1200px', position: 'relative', },
@@ -35,7 +34,7 @@ const simpleStyles = {
     chatWindow: { flex: 1, overflowY: 'auto', marginBottom: '10px', padding: '10px', border: '1px solid #ddd', borderRadius: '5px', backgroundColor: '#fff', minHeight: '400px', maxHeight: '60vh', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', },
     chatControls: { display: 'flex', justifyContent: 'flex-start', marginBottom: '10px', },
     clearButton: { padding: '8px 15px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '0.9rem', },
-    inputArea: { display: 'flex', marginTop: '10px', position: 'relative' }, // 注意：这里加了 relative 用于定位菜单
+    inputArea: { display: 'flex', marginTop: '10px', position: 'relative' }, // 相对定位用于定位菜单
     textInput: { flexGrow: 1, padding: '10px', border: '1px solid #ccc', borderRadius: '5px 0 0 5px', fontSize: '1rem', minWidth: 0, },
     sendButton: { padding: '10px 20px', backgroundColor: '#0070f3', color: 'white', border: 'none', borderRadius: '0 5px 5px 0', cursor: 'pointer', fontSize: '1rem', whiteSpace: 'nowrap', },
     messageContainer: { display: 'flex', flexDirection: 'column', maxWidth: '75%', marginBottom: '10px', padding: '10px', borderRadius: '10px', lineHeight: 1.5, wordBreak: 'break-word', boxShadow: '0 1px 1px rgba(0,0,0,0.05)', },
@@ -47,7 +46,7 @@ const simpleStyles = {
     loginInput: { marginBottom: '10px', padding: '10px', fontSize: '1rem', border: '1px solid #ccc', borderRadius: '5px', },
     loginButton: { padding: '10px', backgroundColor: '#0070f3', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '1rem', },
     
-    // --- 新增：@ 提及菜单样式 ---
+    // --- @ 提及菜单样式 ---
     mentionMenu: {
         position: 'absolute',
         bottom: '100%', // 在输入框上方
@@ -66,9 +65,6 @@ const simpleStyles = {
         cursor: 'pointer',
         borderBottom: '1px solid #eee',
     },
-    mentionItemHover: {
-        backgroundColor: '#f0f0f0',
-    }
 };
 
 export default function Home() {
@@ -82,16 +78,34 @@ export default function Home() {
     const [aiRole, setAiRole] = useState(AI_ROLE_DEFAULT);
     const [onlineMembers, setOnlineMembers] = useState([]);
     
-    // --- 新增：控制菜单显示的状态 ---
-    const [showMentionMenu, setShowMentionMenu] = useState(false);
-    
+    // --- 滚动和菜单状态 ---
     const chatWindowRef = useRef(null);
+    const [showMentionMenu, setShowMentionMenu] = useState(false);
+    const [isNearBottom, setIsNearBottom] = useState(true); // 新增：追踪用户是否在底部
 
-    const scrollToBottom = () => {
+    // --- 智能滚动逻辑 START ---
+    // 处理滚动事件，判断用户是否离开了底部
+    const handleScroll = () => {
         if (chatWindowRef.current) {
-            chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
+            const { scrollTop, scrollHeight, clientHeight } = chatWindowRef.current;
+            // 如果距离底部小于 100px，认为用户在底部
+            const bottomThreshold = 100; 
+            const isBottom = scrollHeight - scrollTop - clientHeight < bottomThreshold;
+            setIsNearBottom(isBottom);
         }
     };
+
+    // 滚动到底部的函数，可选参数 force (是否强制滚动)
+    const scrollToBottom = (force = false) => {
+        if (chatWindowRef.current) {
+            // 只有当强制滚动(如刚发完消息) 或 用户本来就在底部时，才滚动
+            if (force || isNearBottom) {
+                chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
+            }
+        }
+    };
+    // --- 智能滚动逻辑 END ---
+
 
     const fetchHistory = async () => {
         if (!room || !nickname) return;
@@ -140,6 +154,7 @@ export default function Home() {
         }
     };
     
+    // 定时轮询和心跳
     useEffect(() => {
         if (isLoggedIn) {
             fetchHistory();
@@ -155,11 +170,13 @@ export default function Home() {
         }
     }, [isLoggedIn, room, nickname]);
 
+    // 监听消息变化和发送状态，智能滚动
     useEffect(() => {
         if (isLoggedIn) {
-            scrollToBottom();
+            // isSending 为 true 时意味着用户刚刚点击了发送按钮，此时强制滚动
+            scrollToBottom(isSending); 
         }
-    }, [messages, isLoggedIn]);
+    }, [messages, isLoggedIn, isSending]); // 依赖 messages 变化和 isSending 状态
 
     const handleLogin = (e) => {
         e.preventDefault();
@@ -171,37 +188,47 @@ export default function Home() {
         }
     };
 
-    // --- 修改：输入框处理逻辑，检测 @ 符号 ---
+    // --- @ 提及菜单逻辑 START ---
     const handleInputChange = (e) => {
         const val = e.target.value;
         setInputMessage(val);
 
-        // 简单的逻辑：如果输入的最后一个字符是 @，显示菜单
+        // 检测用户是否输入了 @
         if (val.endsWith('@')) {
-            setShowMentionMenu(true);
-        } else if (val.indexOf('@') === -1) {
-            // 如果删除了 @，隐藏菜单
+            // 确保 @ 后面没有空格，且不在其他文本中间
+            const lastChar = val.charAt(val.length - 1);
+            if (lastChar === '@') {
+                setShowMentionMenu(true);
+            }
+        } else if (val.includes('@')) {
+            // 如果输入框里有 @，我们保持菜单可见 (除非用户选择或点击外面)
+            // 这里的逻辑可以根据需求调整：例如只在 @ 后面没有字符时显示
+        } else {
+            // 如果没有 @ 符号，则隐藏菜单
             setShowMentionMenu(false);
         }
     };
 
-    // --- 新增：处理点击菜单项 ---
+    // 处理点击菜单项
     const handleMentionSelect = (selectedName) => {
-        // 移除末尾的 @ (如果存在)，因为我们是追加
-        // 或者简单的做法：把 inputMessage 里的最后一个 @ 替换为 @Name
-        
         const lastAtIndex = inputMessage.lastIndexOf('@');
+        let newValue = inputMessage;
+
         if (lastAtIndex !== -1) {
-            const newValue = inputMessage.substring(0, lastAtIndex) + `@${selectedName} `;
-            setInputMessage(newValue);
+            // 确保我们替换的是最末尾的 @
+            newValue = inputMessage.substring(0, lastAtIndex) + `@${selectedName} `;
         } else {
-            // 容错
-            setInputMessage(prev => prev + `@${selectedName} `);
+            // 容错处理
+            newValue = inputMessage + `@${selectedName} `;
         }
+        
+        setInputMessage(newValue);
         setShowMentionMenu(false);
         // 让输入框重获焦点 (可选)
         document.querySelector('input[type="text"]').focus();
     };
+    // --- @ 提及菜单逻辑 END ---
+
 
     const handleRoomChange = (e) => setRoom(e.target.value);
     const handleNicknameChange = (e) => setNickname(e.target.value);
@@ -213,8 +240,9 @@ export default function Home() {
         setIsSending(true);
         const userMessage = inputMessage;
         setInputMessage(''); 
-        setShowMentionMenu(false); // 发送后隐藏菜单
+        setShowMentionMenu(false); 
 
+        // 立即显示用户消息
         setMessages(prev => [...prev, { 
             sender: nickname, 
             message: userMessage, 
@@ -247,11 +275,13 @@ export default function Home() {
                 console.error('API Error:', data.message || '未知错误');
                 alert(`发送失败: ${data.message || '未知错误'}`);
             }
+            // 成功后，由定时器（fetchHistory）来获取 AI 的回复，不用手动更新
         } catch (error) {
             console.error('发送消息失败:', error);
             alert('网络或服务器错误，发送失败。');
         } finally {
-            setIsSending(false);
+            // 标记发送完成，让 useEffect 再次检查是否需要滚动到底部
+            setIsSending(false); 
         }
     };
     
@@ -356,14 +386,20 @@ export default function Home() {
                         <button onClick={handleExportHistory} style={{...simpleStyles.clearButton, marginLeft: '10px', backgroundColor: '#28a745'}}>导出历史记录 (.html)</button>
                     </div>
 
-                    <div ref={chatWindowRef} style={simpleStyles.chatWindow} className="chat-window">
+                    {/* 聊天窗口：新增 onScroll 事件监听 */}
+                    <div 
+                        ref={chatWindowRef} 
+                        style={simpleStyles.chatWindow} 
+                        className="chat-window"
+                        onScroll={handleScroll} // <--- 监听滚动条位置
+                    >
                         {messages.length > 0 ? renderChatMessages() : <div style={{ color: '#aaa', textAlign: 'center', marginTop: '50px' }}>暂无消息。发送第一条消息开始聊天吧！</div>}
                     </div>
                     
                     {/* 消息输入框区域 (相对定位) */}
                     <form onSubmit={handleSendMessage} style={simpleStyles.inputArea}>
                         
-                        {/* 新增：@ 选单 */}
+                        {/* @ 选单 */}
                         {showMentionMenu && (
                             <div style={simpleStyles.mentionMenu}>
                                 {onlineMembers.map((member, idx) => (
@@ -385,7 +421,7 @@ export default function Home() {
                             placeholder="输入消息，@万能助理 提问..."
                             value={inputMessage}
                             onChange={handleInputChange} 
-                            // 点击其他地方时关闭菜单，稍微延迟以允许点击菜单项
+                            // 失去焦点时隐藏菜单，延迟 200ms 允许点击菜单项
                             onBlur={() => setTimeout(() => setShowMentionMenu(false), 200)} 
                             onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(e); } }}
                             disabled={isSending}
