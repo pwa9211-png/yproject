@@ -1,10 +1,4 @@
-好的，这是根据您的需求（AI 切换到智谱、新增导出功能、修复滚动条和消息对齐）进行修改后的 **`pages/index.js`** 完整代码。
 
-请用以下代码**替换**您项目中的 `pages/index.js` 文件。
-
-### 📄 `pages/index.js` 完整代码
-
-```javascript
 // pages/index.js
 import Head from 'next/head';
 import { useState, useEffect, useRef } from 'react';
