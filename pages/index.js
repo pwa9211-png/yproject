@@ -1,4 +1,3 @@
-
 // pages/index.js
 import Head from 'next/head';
 import { useState, useEffect, useRef } from 'react';
@@ -12,7 +11,7 @@ const AI_SENDER_NAME = '万能助理'; // AI 的昵称
 const AI_ROLE_DEFAULT = '万能助理'; // 默认角色
 // -------------------
 
-// 用于渲染 Markdown 的组件 (保持不变)
+// 用于渲染 Markdown 的组件
 const markdownComponents = {
     // 强制链接在新窗口打开
     a: props => <a href={props.href} target="_blank" rel="noopener noreferrer">{props.children}</a>,
@@ -47,7 +46,7 @@ const markdownComponents = {
 }
 
 
-// --- 样式定义 (修复问题 3: 滚动条/滚动问题) ---
+// --- 样式定义 (修复滚动条和消息对齐的关键) ---
 const simpleStyles = {
     // 基础布局
     container: {
@@ -149,7 +148,7 @@ const simpleStyles = {
         fontSize: '1rem',
         whiteSpace: 'nowrap',
     },
-    // 消息样式 (修复问题 4: 消息对齐)
+    // 消息样式 (修复消息对齐)
     messageContainer: {
         display: 'flex',
         flexDirection: 'column',
@@ -227,21 +226,20 @@ export default function Home() {
         }
     };
 
-    // --- 消息和成员列表获取逻辑 (保持不变) ---
+    // --- 消息和成员列表获取逻辑 ---
     const fetchHistory = async () => {
         if (!room || !nickname) return;
         try {
             const response = await fetch(`/api/history?room=${room}&sender=${nickname}`);
             const data = await response.json();
             if (data.success) {
-                // 历史记录中的角色通常是 'user' 或 'model'
                 setMessages(data.history.map(msg => ({ 
                     sender: msg.sender, 
                     message: msg.message, 
                     timestamp: new Date(msg.timestamp) 
                 })));
             } else if (data.message.includes("限制房间")) {
-                alert(data.message); // 权限不足的警告
+                // 不弹窗，避免干扰，只清除消息
                 setMessages([]);
             }
         } catch (error) {
@@ -255,6 +253,7 @@ export default function Home() {
             const response = await fetch(`/api/online-status?room=${room}&sender=${nickname}`);
             const data = await response.json();
             if (data.success) {
+                // 合并 AI 助理和在线用户
                 setOnlineMembers([...new Set([AI_SENDER_NAME, ...data.members])]);
             } else if (data.message.includes("限制房间")) {
                  setOnlineMembers([AI_SENDER_NAME]);
@@ -304,12 +303,12 @@ export default function Home() {
     }, [messages, isLoggedIn]);
 
 
-    // --- 登录/输入/发送逻辑 (保持不变) ---
+    // --- 登录/输入/发送逻辑 ---
     const handleLogin = (e) => {
         e.preventDefault();
         if (nickname.trim() && room.trim()) {
             setIsLoggedIn(true);
-            // 登录后立即发送心跳并获取历史，无需等待定时器
+            // 登录后立即发送心跳并获取历史
             sendHeartbeat();
         } else {
             alert('昵称和房间号不能为空！');
@@ -375,7 +374,6 @@ export default function Home() {
             }
             
             // AI 的回复由 fetchHistory 定时更新，所以这里不再手动添加 AI 消息到 state
-            // 只有当 AI 没有回复时（例如未被 @），才直接结束发送状态
             if (data.ai_reply && data.ai_reply.includes('AI 未被 @')) {
                 // do nothing
             }
@@ -416,7 +414,7 @@ export default function Home() {
         }
     };
 
-    // --- 新增：HTML 导出功能函数 (修复问题 1: HTML 导出) ---
+    // --- HTML 导出功能函数 ---
     const handleExportHistory = async () => {
         if (!room || !nickname) { 
             alert("请先登录房间！");
@@ -424,6 +422,7 @@ export default function Home() {
         }
 
         try {
+            // 请确保您已经创建了 pages/api/export-history.js 文件来处理这个请求
             const response = await fetch(`/api/export-history?room=${room}&sender=${nickname}`); 
             
             if (response.ok) {
@@ -432,6 +431,7 @@ export default function Home() {
                 const a = document.createElement('a');
                 a.href = url;
                 
+                // 尝试从 Content-Disposition 头获取文件名
                 const contentDisposition = response.headers.get('Content-Disposition');
                 let filename = `chat_export_${room}_${new Date().toISOString().slice(0, 10)}.html`;
                 if (contentDisposition && contentDisposition.indexOf('filename=') !== -1) {
@@ -460,7 +460,7 @@ export default function Home() {
 
 
     // ---------------------------------------------------
-    // --- 消息渲染部分 (修复问题 4: 消息对齐) ---
+    // --- 消息渲染部分 (修复消息对齐) ---
     // ---------------------------------------------------
     const renderChatMessages = () => {
         return messages.map((msg, index) => {
@@ -583,6 +583,13 @@ export default function Home() {
                             placeholder="输入消息，@万能助理 提问，或 /设定角色 [新角色] 切换AI身份..."
                             value={inputMessage}
                             onChange={handleInputChange} 
+                            onKeyPress={(e) => {
+                                // 允许按下回车键发送消息
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSendMessage(e);
+                                }
+                            }}
                             disabled={isSending}
                             style={simpleStyles.textInput}
                         />
@@ -616,4 +623,3 @@ export default function Home() {
         </div>
     );
 }
-```
