@@ -1,4 +1,4 @@
-// pages/api/chat.js
+// pages/api/chat.js (新增部署验证标记)
 
 import { connectToMongo } from '../../lib/mongodb'; 
 import { GoogleGenAI } from '../../lib/ai'; // 确保正确导入 AI 客户端
@@ -31,105 +31,74 @@ export default async function handler(req, res) {
             // 如果用户不在白名单内，拒绝操作
             return res.status(403).json({
                 success: false,
-                message: `房间 ${RESTRICTED_ROOM} 是限制房间。您的身份不被允许发送消息。`,
+                message: `房间 ${RESTRICTED_ROOM} 是限制房间。您无权发送消息。`,
+                // 返回一个特殊的回复，以免前端报错
+                ai_reply: '对不起，您无权在此房间发言。' 
             });
         }
     }
-    // --- 权限控制逻辑 END ---\
+    // --- 权限控制逻辑 END ---
 
-    // 2. 检查 AI 提及和角色设定命令
-    // 匹配当前 aiRole 或默认 AI_SENDER_NAME
-    const aiMentionPattern = new RegExp(`@${aiRole.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}|@${AI_SENDER_NAME}`, 'i'); 
-    const isAiMentioned = aiMentionPattern.test(message);
-    const isRoleCommand = message.trim().startsWith('/设定角色');
-    let newAiRole = aiRole;
+    // 2. 连接数据库
+    let ChatMessage;
+    try {
+        const { ChatMessage: CM } = await connectToMongo();
+        ChatMessage = CM;
+    } catch (dbError) {
+        console.error('Database connection failed:', dbError);
+        return res.status(500).json({ success: false, message: '数据库连接失败，请检查配置。' });
+    }
+
+    // 3. 准备消息和上下文
+    const cleanMessage = message.trim();
+    if (!cleanMessage) {
+        return res.status(200).json({ success: true, message: 'Empty message received.' });
+    }
+
+    // 检查是否需要 AI 回复 (包含 @万能助理 或 /设定角色 命令)
+    const isAiMentioned = cleanMessage.includes(`@${AI_SENDER_NAME}`) || cleanMessage.startsWith('/设定角色');
+
+    // 4. 保存用户消息到数据库
+    const userMessageDoc = { 
+        room,
+        sender, 
+        message: cleanMessage, 
+        role: 'user', 
+        timestamp: new Date() 
+    };
+    await ChatMessage.insertOne(userMessageDoc);
+
+
+    // 如果没有提及 AI 且不是 /设定角色 命令，则不需要 AI 回复
+    if (!isAiMentioned && !cleanMessage.startsWith('/设定角色')) {
+        return res.status(200).json({ success: true, message: 'User message saved, AI not called.' });
+    }
+
+    // 如果需要 AI 回复，获取上下文历史
+    const historyDocs = await ChatMessage.find({ room })
+        .sort({ timestamp: 1 }) 
+        .limit(20) // 只取最近的 20 条消息作为上下文
+        .toArray();
+
+    // 格式化上下文给 AI
+    const context = historyDocs.map(doc => ({
+        role: doc.role, // 'user' 或 'model'
+        text: doc.message,
+    }));
+
     let aiReply;
 
     try {
-        const { ChatMessage, OnlineUser } = await connectToMongo();
-
-        // 3. 保存用户消息到数据库
-        const userMessageDoc = { 
-            room,
-            sender,
-            message, 
-            role: 'user', 
-            timestamp: new Date() 
-        };
-        await ChatMessage.insertOne(userMessageDoc);
-        
-        // 3.1. 如果 AI 未被提及且不是角色设定命令，则直接返回
-        if (!isAiMentioned && !isRoleCommand) {
-            return res.status(200).json({ 
-                success: true, 
-                message: 'User message saved.', 
-                ai_reply: 'AI 未被 @，不回复。'
-            });
-        }
-        
-        // --- 角色设定逻辑 START ---
-        if (isRoleCommand) {
-            // 提取新角色
-            const match = message.trim().match(/\/设定角色\s+(.+)/i);
-            if (match && match[1].trim()) {
-                newAiRole = match[1].trim().replace(/\*\*/g, ''); // 移除可能的 Markdown 粗体
-                aiReply = `角色设定成功，新的 AI 身份是：${newAiRole}`;
-                // 注意：这里只返回给前端新角色，实际 AI 的 context 由 lib/ai.js 中的 system instruction 保持
-            } else {
-                aiReply = '角色设定失败。请使用正确的格式：/设定角色 [新角色描述]';
-            }
-
-            // 6. 保存 AI 回复到数据库 (角色设定回复)
-            const aiMessageDoc = { 
-                room,
-                sender: AI_SENDER_NAME, // 角色设定消息统一使用默认昵称作为发送者
-                message: aiReply, 
-                role: 'model', 
-                timestamp: new Date() 
-            };
-            await ChatMessage.insertOne(aiMessageDoc);
-            
-            // 返回结果
-            return res.status(200).json({ 
-                success: true, 
-                message: 'Role command executed.', 
-                ai_reply: aiReply 
-            });
-        }
-        // --- 角色设定逻辑 END ---\
-
-        // 4. 获取最近的聊天历史作为上下文
-        // 限制在 10 条消息内，以控制成本和 token 长度
-        const historyDocs = await ChatMessage.find({ room })
-            .sort({ timestamp: -1 }) // 最新消息在前
-            .limit(10)
-            .toArray();
-
-        // 重新排序并格式化 context
-        const context = historyDocs.reverse().map(doc => ({
-            // 确保 role 字段是 'user' 或 'model' 以供 lib/ai.js 正确转换
-            role: doc.role === 'user' ? 'user' : 'model', 
-            text: doc.message
-        })).filter(m => m.text);
-
-        // 移除用户消息中的 @提及部分，只将清理后的消息用于 AI 思考
-        const cleanMessage = message.replace(aiMentionPattern, '').trim();
-        
-        // ⭐️ 修复上下文问题：确保用户消息是 context 中的最后一条，并且只包含清理后的文本。
-        // 由于我们已经在 3. 中保存了原始消息，这里我们只需要将它添加到 context 数组中供 AI 使用。
-        // 注意：historyDocs 已经包含了刚刚保存的 userMessageDoc
-        // 故 context 数组的最后一个元素就是刚刚保存的用户消息，我们只需要清理它的内容。
-        if (context.length > 0) {
-             context[context.length - 1].text = cleanMessage;
-        }
-
         // 5. 调用 AI API
-        // 关键：这里传递了当前的角色设定
         aiReply = await GoogleGenAI(context, aiRole);
         
+        // **********************************************
+        // 🚨 部署验证标记：请注意 AI 回复是否包含此标记
+        // **********************************************
+        aiReply = `[联网部署验证-V3.1] ${aiReply}`; 
+        
         // 6. 保存 AI 回复到数据库
-        // 使用当前 aiRole 作为 sender，以便在前端显示正确的角色名称
-        const finalAiSender = aiRole.replace(/\*\*/g, ''); 
+        const finalAiSender = AI_SENDER_NAME; // 使用默认的 AI 昵称
 
         const aiMessageDoc = { 
             room,
@@ -149,15 +118,20 @@ export default async function handler(req, res) {
     } catch (error) {
         console.error('Chat API Error:', error);
         
-        // 如果出错，尝试返回一个友好的 AI 错误信息
-        const friendlyError = error.message.includes('ZHIPU_API_KEY') 
-            ? 'AI 服务连接失败，请检查 ZHIPU_API_KEY 配置是否正确。' 
-            : `AI 服务调用失败。错误信息: ${error.message}`;
+        // 7. 异常处理：保存 AI 调用失败信息到数据库
+        const errorReply = `对不起，AI 服务调用失败。请稍后再试。错误信息：${error.message}`;
+        await ChatMessage.insertOne({ 
+            room,
+            sender: AI_SENDER_NAME, 
+            message: errorReply, 
+            role: 'model', 
+            timestamp: new Date() 
+        });
 
         return res.status(500).json({ 
             success: false, 
-            message: friendlyError,
-            ai_reply: friendlyError
+            message: 'AI 调用失败，错误已记录。', 
+            details: error.message 
         });
     }
 }
