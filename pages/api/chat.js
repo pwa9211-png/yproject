@@ -1,4 +1,4 @@
-// pages/api/chat.js (最终修正：健壮性、系统提示和模拟搜索优化)
+// pages/api/chat.js (最终修复：优化模拟搜索结果)
 
 import { connectToMongo } from '../../lib/mongodb'; 
 import { GoogleGenAI } from '../../lib/ai'; 
@@ -9,18 +9,22 @@ const ALLOWED_USERS = ['Didy', 'Shane'];
 const AI_SENDER_NAME = '万能助理'; // 默认 AI 昵称
 // -------------------
 
-// 1. 模拟网络搜索函数 (优化模拟结果，防止 AI 认为结果为空)
+// 1. 模拟网络搜索函数 (添加了针对天气的明确模拟结果)
 async function performWebSearch(query) {
     console.log(`[Executing Simulated Web Search] 关键词: "${query}"`);
     
-    // 针对用户常问的两个问题，提供明确的、有价值的模拟结果
+    // 针对用户常问的三个问题，提供明确的、有价值的模拟结果
     if (query.includes('热搜') || query.includes('新闻')) {
         return `{"result": "根据实时网络搜索，今天的热搜前三条是：1. 智谱AI推出GLM-4工具版，支持Function Calling；2. Vercel Serverless Function 成功实现两轮交互；3. 上证指数今日小幅上涨1.5%。", "source": "模拟实时数据源 / ${new Date().toLocaleDateString('zh-CN')}"}`;
-    } else if (query.includes('指数') || query.includes('股价')) {
+    } else if (query.includes('指数') || query.includes('股价') || query.includes('金融')) {
         return `{"result": "根据实时金融信息，今天的上证指数开盘3050点，最高触及3080点，当前收盘点位为3075.25点，成交量略有放大。市场普遍认为短期内有望继续震荡上行。", "source": "模拟金融数据源 / ${new Date().toLocaleDateString('zh-CN')}"}`;
+    } else if (query.includes('天气') || query.includes('气温')) { // <-- 新增天气条件
+        // 针对天气查询提供具体的模拟数据
+        return `{"result": "根据实时天气查询，上海今天的天气为多云转晴，气温在10°C到18°C之间，东南风3-4级。空气质量良好，适合户外活动。", "source": "模拟天气数据源 / ${new Date().toLocaleDateString('zh-CN')}"}`;
     }
 
-    return `{"result": "根据实时网络搜索，关于关键词'${query}'的最新信息是：AI助手已成功联网并获取了最新数据，请放心使用。", "source": "模拟数据源 / ${new Date().toLocaleDateString('zh-CN')}"}`;
+    // 改进 Default Case：确保返回的数据是具体信息，而不是元数据
+    return `{"result": "针对关键词'${query}'的搜索结果如下：AI助手已成功联网，当前模拟信息是：数据集成正常，服务器负载稳定。", "source": "模拟数据源 / ${new Date().toLocaleDateString('zh-CN')}"}`;
 }
 
 
@@ -31,14 +35,16 @@ export default async function handler(req, res) {
 
     const { room, sender, message, aiRole } = req.body;
 
-    // ... [字段验证和权限控制逻辑保持不变] ...
+    // --- 字段验证/权限控制逻辑保持不变 ---
     if (!room || !sender || !message || !aiRole) {
         return res.status(400).json({ success: false, message: 'Missing required fields.' });
     }
+    const RESTRICTED_ROOM = '2';
+    const ALLOWED_USERS = ['Didy', 'Shane']; 
     if (room === RESTRICTED_ROOM && !ALLOWED_USERS.includes(sender)) {
         return res.status(403).json({ success: false, message: `房间 ${RESTRICTED_ROOM} 是限制房间。`, ai_reply: '对不起，您无权在此房间发言。' });
     }
-    
+
     let ChatMessage;
     try {
         const { ChatMessage: CM } = await connectToMongo();
@@ -53,6 +59,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, message: 'Empty message received.' });
     }
 
+    const AI_SENDER_NAME = '万能助理'; // 默认 AI 昵称
     const isAiMentioned = cleanMessage.includes(`@${AI_SENDER_NAME}`) || cleanMessage.startsWith('/设定角色');
 
     // 2. 保存用户消息
@@ -68,10 +75,8 @@ export default async function handler(req, res) {
 
     // 准备系统消息
     const currentTime = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-    // 优化系统提示，确保 AI 知道联网工具是可用的
     const systemInstruction = `你是一个多功能聊天室里的助手。你的当前角色是: ${aiRole}。当前系统时间是: ${currentTime}。你被授权使用名为 'web_search' 的联网搜索工具。**【指令】如果用户询问实时或最新信息（如新闻、热搜、天气、股价等），你必须调用 'web_search' 工具进行搜索，然后基于搜索结果回答。** 如果用户使用 /设定角色 命令，你应回复“角色设定成功”。`;
     
-    // 完整的消息历史 (用于发送给 AI)
     let messages = [
         { role: "system", content: systemInstruction },
         ...historyDocs.map(doc => ({
@@ -81,11 +86,11 @@ export default async function handler(req, res) {
     ];
 
     let finalAiReply = '';
-    let attempt = 0; // 新增：用于跟踪 API 调用次数
+    let attempt = 0; 
 
     try {
-        // --- 核心逻辑循环 (支持多轮工具调用，但我们只允许一次) ---
-        while (attempt < 2) { // 限制最多只进行两轮 (第一轮提问，第二轮带工具结果)
+        // --- 核心逻辑循环 (执行最多两轮交互) ---
+        while (attempt < 2) { 
             attempt++;
             
             // 4. API 调用
@@ -99,13 +104,10 @@ export default async function handler(req, res) {
 
             // --- 检查是否需要工具调用 ---
             if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
-                // 如果是第一轮，且模型要求调用工具
+                
                 if (attempt === 1) {
-                    
-                    // 将模型要求工具调用的消息添加到历史中
                     messages.push(responseMessage);
                     
-                    // 遍历所有工具调用 (这里只执行第一个)
                     const toolCall = responseMessage.tool_calls[0];
                     if (toolCall.function.name === 'web_search') {
                         
@@ -121,31 +123,27 @@ export default async function handler(req, res) {
                             tool_call_id: toolCall.id,
                             role: 'tool',
                             name: toolCall.function.name,
-                            content: searchResult,
+                            content: searchResult, // <-- 重要的搜索结果
                         });
                         
-                        // 循环将再次执行，进行第二次 API 调用
-                        continue; 
+                        continue; // 继续循环，进行第二次 API 调用
                     } else {
-                        // 发现非预期的工具调用
                         finalAiReply = `⚠️ 收到AI的非预期工具调用指令 (${toolCall.function.name})，已中断。`;
                         break; 
                     }
                 } else {
-                     // 理论上不应发生：第二次调用仍要求工具调用
                     finalAiReply = '⚠️ AI在第二轮调用中仍要求工具调用，已中断。';
                     break;
                 }
             } else {
-                // 模型直接回答，或者在第二轮调用后生成了答案
+                // 模型直接回答，或在第二轮调用后生成了答案
                 finalAiReply = responseMessage.content;
                 break; // 结束循环
             }
         }
         
-        // 如果循环结束时 finalAiReply 仍为空，说明有逻辑问题
         if (!finalAiReply) {
-             finalAiReply = "抱歉，由于 API 内部循环逻辑问题，我无法生成回复。";
+             finalAiReply = "抱歉，由于 API 内部逻辑问题，我无法生成回复。";
         }
 
         // 5. 保存最终 AI 回复到数据库
@@ -167,7 +165,7 @@ export default async function handler(req, res) {
         });
 
     } catch (error) {
-        // ... [错误处理逻辑保持不变] ...
+        // --- 错误处理逻辑保持不变 ---
         console.error('Chat API Error:', error);
         
         const errorReply = `对不起，AI 服务调用失败。请稍后再试。错误信息：${error.message}`;
