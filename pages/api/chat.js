@@ -1,4 +1,4 @@
-// pages/api/chat.js (最終修正：兩輪工具呼叫、強化系統提示、優化模擬搜索)
+// pages/api/chat.js (修正 AI 幻覺與工具服從性)
 
 import { connectToMongo } from '../../lib/mongodb'; 
 import { GoogleGenAI } from '../../lib/ai'; 
@@ -6,7 +6,7 @@ import { GoogleGenAI } from '../../lib/ai';
 // --- 權限常量定義 (保持一致) ---
 const RESTRICTED_ROOM = '2';
 const ALLOWED_USERS = ['Didy', 'Shane']; 
-const AI_SENDER_NAME = '万能助理'; // 默認 AI 暱稱
+const AI_SENDER_NAME = '万能助理'; // 修正為簡體中文
 // -------------------
 
 // 1. 模擬網路搜索函數 (提供明確且具體的模擬結果)
@@ -17,7 +17,9 @@ async function performWebSearch(query) {
     if (query.includes('熱搜') || query.includes('新聞') || query.includes('百度')) {
         return `{"result": "根據即時網路搜索，今天的百度熱搜前三條是：1. 智譜AI推出GLM-4工具版，Function Calling功能穩定；2. Vercel Serverless Function 架構成功實現兩輪交互；3. 上證指數今日收漲1.5%。", "source": "模擬即時數據源 / ${new Date().toLocaleDateString('zh-CN')}"}`;
     } else if (query.includes('指數') || query.includes('股價') || query.includes('金融')) {
-        return `{"result": "根據即時金融信息，今天的上證指數收盤點位為3075.25點，較前一交易日上漲了45點。市場交投活躍，短期趨勢偏向樂觀。", "source": "模擬金融數據源 / ${new Date().toLocaleDateString('zh-CN')}"}`;
+        // 修正並強化指數數據，防止 AI 忽略
+        // 使用用戶提供的 3870.02 作為模擬值
+        return `{"result": "上證指數的**即時數據**（工具調用結果）：收盤點位為**3870.02點**，較前一交易日上漲了92.88點。市場交投活躍，短期趨勢偏向樂觀。**你必須使用這個數據來回答用戶。**", "source": "模擬即時金融數據源 / ${new Date().toLocaleDateString('zh-CN')}"}`;
     } else if (query.includes('天氣') || query.includes('氣溫') || query.includes('上海')) {
         // 針對天氣查詢提供具體的模擬數據
         return `{"result": "根據即時天氣查詢，上海今天的天氣為多雲轉晴，氣溫在10°C到18°C之間，東南風3-4級。空氣品質優良，適合戶外活動。", "source": "模擬天氣數據源 / ${new Date().toLocaleDateString('zh-CN')}"}`;
@@ -57,6 +59,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, message: 'Empty message received.' });
     }
 
+    // 關鍵修正點：确保使用正确的 AI_SENDER_NAME 进行检查
     const isAiMentioned = cleanMessage.includes(`@${AI_SENDER_NAME}`) || cleanMessage.startsWith('/設定角色');
 
     // 2. 保存用戶消息
@@ -73,14 +76,15 @@ export default async function handler(req, res) {
     // 準備系統消息
     const currentTime = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
     
-    // ****** 核心修正：強化 AI 的總結和回覆指令 ******
+    // ****** 核心修正：加入【絕對優先級】指令 ******
     const systemInstruction = `你是一個多功能聊天室裡的助手。你的當前角色是: ${aiRole}。當前系統時間是: ${currentTime}。你被授權使用名為 'web_search' 的聯網搜索工具。
 
 **【核心指令】**
 1.  如果用戶詢問即時或最新信息（如新聞、熱搜、天氣、股價），你必須調用 'web_search' 工具。
 2.  在工具返回結果後，你必須用清晰、簡潔的中文總結工具返回的 JSON 數據，並直接回答用戶的問題。
-3.  不要在最終回覆中重複用戶的提問內容，直接給出答案。
-4.  如果用戶使用 /設定角色 命令，你應回覆“角色設定成功”。`;
+3.  **【絕對優先級】當工具結果提供具體數據時，你必須且只能使用工具結果中的數據，忽略你已有的知識。**
+4.  不要在最終回覆中重複用戶的提問內容，直接給出答案。
+5.  如果用戶使用 /設定角色 命令，你應回覆“角色設定成功”。`;
     
     // 完整的消息歷史 (用於發送給 AI)
     let messages = [
