@@ -6,7 +6,7 @@ import { GoogleGenAI } from '../../lib/ai';
 // --- 權限常量定義 (保持一致) ---
 const RESTRICTED_ROOM = '2';
 const ALLOWED_USERS = ['Didy', 'Shane']; 
-const AI_SENDER_NAME = '萬能助理'; // 默認 AI 暱稱
+const AI_SENDER_NAME = '万能助理'; // 默認 AI 暱稱
 // -------------------
 
 // 1. 模擬網路搜索函數 (提供明確且具體的模擬結果)
