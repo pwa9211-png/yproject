@@ -1,9 +1,9 @@
-// pages/api/chat.js  【预搜索版 - 2025-11-26】
+// pages/api/chat.js  【预搜索版-修复导出】2025-11-26
 import { connectToMongo } from '../../lib/mongodb';
 import { runChatWithTools, performWebSearch } from '../../lib/ai';
 
 const RESTRICTED_ROOM = '2';
-const ALLOWED_USERS = ['Didy', 'Shane'];
+const ALLOWED_USERS   = ['Didy', 'Shane'];
 const AI_SENDER_NAME  = '万能助理';
 
 /** 判断是否需要预搜索 */
@@ -29,11 +29,11 @@ export default async function handler(req, res) {
     await ChatMessage.insertOne({ room, sender, message, role: 'user', timestamp: new Date() });
 
     let aiReply;
-    // 暴力触发：@万能助理 或 关键词
+    // 只要@万能助理 或触发关键词 => 先搜
     if (message.includes(`@${AI_SENDER_NAME}`) || needsSearch(message)) {
       console.log('【预搜索触发】');
-      const query = message.replace(`@${AI_SENDER_NAME}`, '').trim();
-      const searchTxt = await performWebSearch(query);          // 一定搜
+      const query   = message.replace(`@${AI_SENDER_NAME}`, '').trim();
+      const searchTxt = await performWebSearch(query);   // 一定搜
       const prompt    = `请用“【已联网】”开头，总结以下搜索结果：\n${searchTxt}`;
       aiReply         = await runChatWithTools([{ role: 'user', content: prompt }]);
     } else {
