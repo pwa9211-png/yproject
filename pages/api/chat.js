@@ -1,4 +1,4 @@
-// pages/api/chat.js  【系统时间+实时行情版-2025-11-26】
+// pages/api/chat.js  【UTC+8 & 新浪行情防403版-2025-11-26】
 import { connectToMongo } from '../../lib/mongodb';
 import { runChatWithTools, performWebSearch, fetchSZZS } from '../../lib/ai';
 
@@ -17,15 +17,16 @@ function isTimeQuery(text) {
   return /现在几点|当前时间|今天.*日期|现在.*时间/i.test(text);
 }
 
-/** 格式化系统时间（北京时间） */
+/** 格式化系统时间（北京时间 UTC+8） */
 function formatTime() {
   const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mi = String(now.getMinutes()).padStart(2, '0');
-  const ss = String(now.getSeconds()).padStart(2, '0');
+  const cn = new Date(now.getTime() + 8 * 3600 * 1000); // +8h
+  const yyyy = cn.getUTCFullYear();
+  const mm = String(cn.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(cn.getUTCDate()).padStart(2, '0');
+  const hh = String(cn.getUTCHours()).padStart(2, '0');
+  const mi = String(cn.getUTCMinutes()).padStart(2, '0');
+  const ss = String(cn.getUTCSeconds()).padStart(2, '0');
   return `【已联网】北京时间 ${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
 }
 
