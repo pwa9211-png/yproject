@@ -1,4 +1,4 @@
-// pages/api/chat.js  【预搜索版-修复导出】2025-11-26
+// pages/api/chat.js  【@触发+预搜索版】-2025-11-26
 import { connectToMongo } from '../../lib/mongodb';
 import { runChatWithTools, performWebSearch } from '../../lib/ai';
 
@@ -6,7 +6,7 @@ const RESTRICTED_ROOM = '2';
 const ALLOWED_USERS   = ['Didy', 'Shane'];
 const AI_SENDER_NAME  = '万能助理';
 
-/** 判断是否需要预搜索 */
+/** 关键词预搜索判断 */
 function needsSearch(text) {
   const kw = ['今天', '最新', '热搜', '天气', '股价', '百度', '微博', '头条', '前3条', '前三条'];
   return kw.some(k => text.includes(k));
@@ -28,9 +28,14 @@ export default async function handler(req, res) {
     // 保存用户消息
     await ChatMessage.insertOne({ room, sender, message, role: 'user', timestamp: new Date() });
 
+    // ❗❗❗ 只有 @万能助理 才继续 ❗❗❗
+    if (!message.includes(`@${AI_SENDER_NAME}`)) {
+      return res.status(200).json({ success: true, message: 'No AI trigger.' });
+    }
+
     let aiReply;
-    // 只要@万能助理 或触发关键词 => 先搜
-    if (message.includes(`@${AI_SENDER_NAME}`) || needsSearch(message)) {
+    // 在@前提下，再决定是否预搜索
+    if (needsSearch(message)) {
       console.log('【预搜索触发】');
       const query   = message.replace(`@${AI_SENDER_NAME}`, '').trim();
       const searchTxt = await performWebSearch(query);   // 一定搜
