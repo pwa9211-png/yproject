@@ -1,6 +1,6 @@
 // pages/api/chat.js  【系统时间+实时行情版-2025-11-26】
 import { connectToMongo } from '../../lib/mongodb';
-import { runChatWithTools, performWebSearch } from '../../lib/ai';
+import { runChatWithTools, performWebSearch, fetchSZZS } from '../../lib/ai';
 
 const RESTRICTED_ROOM = '2';
 const ALLOWED_USERS   = ['Didy', 'Shane'];
@@ -8,7 +8,7 @@ const AI_SENDER_NAME  = '万能助理';
 
 /** 关键词预搜索判断（不含时间类） */
 function needsSearch(text) {
-  const kw = ['热搜', '天气', '股价', '上证指数', '百度', '微博', '头条', '前3条', '前三条'];
+  const kw = ['热搜', '天气', '股价', '百度', '微博', '头条', '前3条', '前三条'];
   return kw.some(k => text.includes(k));
 }
 
@@ -55,15 +55,22 @@ export default async function handler(req, res) {
       // ① 系统时间直接返回
       console.log('【系统时间】');
       aiReply = formatTime();
+    } else if (/上证指数|szzs/i.test(message)) {
+      // ② 直连新浪行情 JSON
+      console.log('【行情直连】');
+      const data = await fetchSZZS();
+      aiReply = data
+        ? `【已联网】上证指数 ${data.price}（${data.change > 0 ? '+' : ''}${data.change} ${data.changePercent}%） 来源：${data.source}`
+        : '【已联网】行情接口暂时不可用';
     } else if (needsSearch(message)) {
-      // ② 行情/热搜等 → 预搜索
+      // ③ 其它热搜/天气等 → 预搜索
       console.log('【预搜索触发】');
       const query   = message.replace(`@${AI_SENDER_NAME}`, '').trim();
       const searchTxt = await performWebSearch(query);
       const prompt    = `请用“【已联网】”开头，总结以下搜索结果：\n${searchTxt}`;
       aiReply         = await runChatWithTools([{ role: 'user', content: prompt }]);
     } else {
-      // ③ 普通对话
+      // ④ 普通对话
       aiReply = await runChatWithTools([{ role: 'user', content: message }]);
     }
 
