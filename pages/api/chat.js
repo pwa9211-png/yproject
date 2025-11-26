@@ -1,4 +1,4 @@
-// pages/api/chat.js  【@触发+预搜索版】-2025-11-26
+// pages/api/chat.js  【@触发+关键词预搜索版-2025-11-26】
 import { connectToMongo } from '../../lib/mongodb';
 import { runChatWithTools, performWebSearch } from '../../lib/ai';
 
@@ -6,9 +6,13 @@ const RESTRICTED_ROOM = '2';
 const ALLOWED_USERS   = ['Didy', 'Shane'];
 const AI_SENDER_NAME  = '万能助理';
 
-/** 关键词预搜索判断 */
+/** 关键词预搜索判断（含时间类） */
 function needsSearch(text) {
-  const kw = ['今天', '最新', '热搜', '天气', '股价', '百度', '微博', '头条', '前3条', '前三条'];
+  const kw = [
+    '今天', '现在', '几点', '时间', '年月日',
+    '最新', '热搜', '天气', '股价',
+    '百度', '微博', '头条', '前3条', '前三条'
+  ];
   return kw.some(k => text.includes(k));
 }
 
