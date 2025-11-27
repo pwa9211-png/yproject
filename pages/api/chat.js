@@ -1,4 +1,4 @@
-// pages/api/chat.js  【含流逝时间+历史行情版-2025-11-26】
+// pages/api/chat.js  2025-11-27  去掉“【已联网】”+任意日期行情+流逝时间
 import { connectToMongo } from '../../lib/mongodb';
 import { runChatWithTools, performWebSearch, fetchSZZS, fetchSZZSHistory } from '../../lib/ai';
 
@@ -27,7 +27,7 @@ function formatTime() {
   const hh = String(cn.getUTCHours()).padStart(2, '0');
   const mi = String(cn.getUTCMinutes()).padStart(2, '0');
   const ss = String(cn.getUTCSeconds()).padStart(2, '0');
-  const str = `【已联网】北京时间 ${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+  const str = `北京时间 ${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
   lastTime = { ts: cn, str }; // 记录
   return str;
 }
@@ -35,12 +35,12 @@ function formatTime() {
 /** 计算与上一次时间的流逝时长 */
 let lastTime = null; // 内存变量
 function elapsedTime() {
-  if (!lastTime) return '【已联网】暂无上一次时间记录';
+  if (!lastTime) return '暂无上一次时间记录';
   const now = new Date(Date.now() + 8 * 3600 * 1000);
   const sec = Math.floor((now - lastTime.ts) / 1000);
   const min = Math.floor(sec / 60);
   const secLeft = sec % 60;
-  return `【已联网】距离上一次回答已过去 ${min} 分 ${secLeft} 秒`;
+  return `距离上一次回答已过去 ${min} 分 ${secLeft} 秒`;
 }
 
 export default async function handler(req, res) {
@@ -73,32 +73,41 @@ export default async function handler(req, res) {
       // ② 计算流逝时间
       console.log('【流逝时间】');
       aiReply = elapsedTime();
-    } else if (/上证指数|szzs/i.test(message) && /昨天|前天|上一交易日|历史/i.test(message)) {
-      // ③ 历史上证指数
+    } else if (/上证指数|szzs/i.test(message) && /\d{4}[-年]\d{1,2}[-月]\d{1,2}/.test(message)) {
+      // ③ 任意日期上证指数
+      console.log('【任意历史行情】');
+      const dateMatch = message.match(/(\d{4})[-年](\d{1,2})[-月](\d{1,2})/);
+      const date = `${dateMatch[1]}-${String(dateMatch[2]).padStart(2,'0')}-${String(dateMatch[3]).padStart(2,'0')}`;
+      const data = await fetchSZZSHistory(date);
+      aiReply = data
+        ? `${data.date} 上证指数收盘 ${data.close}  来源：${data.source}`
+        : `未找到 ${date} 的历史数据`;
+    } else if (/昨天|前天|上一交易日/i.test(message) && /上证指数|szzs/i.test(message)) {
+      // ④ 昨天/前天上证指数
       console.log('【历史行情】');
       let target = new Date(Date.now() + 8 * 3600 * 1000 - 86400000); // 默认昨天
       if (/前天/i.test(message)) target = new Date(target - 86400000);
       const date = target.toISOString().slice(0, 10);
       const data = await fetchSZZSHistory(date);
       aiReply = data
-        ? `【已联网】${data.date} 上证指数收盘 ${data.close}  来源：${data.source}`
-        : '【已联网】未找到该日历史数据';
+        ? `${data.date} 上证指数收盘 ${data.close}  来源：${data.source}`
+        : `未找到 ${date} 的历史数据`;
     } else if (/上证指数|szzs/i.test(message)) {
-      // ④ 实时上证指数
+      // ⑤ 实时上证指数
       console.log('【行情直连】');
       const data = await fetchSZZS();
       aiReply = data
-        ? `【已联网】上证指数 ${data.price}（${data.change > 0 ? '+' : ''}${data.change} ${data.changePercent}%） 来源：${data.source}`
-        : '【已联网】行情接口暂时不可用';
+        ? `上证指数 ${data.price}（${data.change > 0 ? '+' : ''}${data.change} ${data.changePercent}%） 来源：${data.source}`
+        : `行情接口暂时不可用`;
     } else if (needsSearch(message)) {
-      // ⑤ 其它热搜/天气等 → 预搜索
+      // ⑥ 其它热搜/天气等 → 预搜索
       console.log('【预搜索触发】');
       const query   = message.replace(`@${AI_SENDER_NAME}`, '').trim();
       const searchTxt = await performWebSearch(query);
-      const prompt    = `请用“【已联网】”开头，总结以下搜索结果：\n${searchTxt}`;
+      const prompt    = `请总结以下搜索结果：\n${searchTxt}`;
       aiReply         = await runChatWithTools([{ role: 'user', content: prompt }]);
     } else {
-      // ⑥ 普通对话
+      // ⑦ 普通对话
       aiReply = await runChatWithTools([{ role: 'user', content: message }]);
     }
 
