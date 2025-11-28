@@ -243,11 +243,12 @@ export default function Home() {
         setShowMentionMenu(false); 
 
         // 立即显示用户消息
-        setMessages(prev => [...prev, { 
+        const userMsgObj = { 
             sender: nickname, 
             message: userMessage, 
             timestamp: new Date() 
-        }]);
+        };
+        setMessages(prev => [...prev, userMsgObj]);
         
         // 角色设定逻辑
         const roleCommandMatch = userMessage.match(/^\/设定角色\s+(.+)/);
@@ -271,16 +272,28 @@ export default function Home() {
                 body: JSON.stringify({ room, sender: nickname, message: userMessage, aiRole }),
             });
             const data = await response.json();
+            
             if (!response.ok) {
                 console.error('API Error:', data.message || '未知错误');
                 alert(`发送失败: ${data.message || '未知错误'}`);
+                setIsSending(false);
+                return;
             }
-            // 成功后，由定时器（fetchHistory）来获取 AI 的回复，不用手动更新
+
+            // 如果 AI 有回复，直接添加到消息列表
+            if (data.ai_reply) {
+                const aiMessage = {
+                    sender: AI_SENDER_NAME,
+                    message: data.ai_reply,
+                    timestamp: new Date()
+                };
+                setMessages(prev => [...prev, aiMessage]);
+            }
+            
         } catch (error) {
             console.error('发送消息失败:', error);
             alert('网络或服务器错误，发送失败。');
         } finally {
-            // 标记发送完成，让 useEffect 再次检查是否需要滚动到底部
             setIsSending(false); 
         }
     };

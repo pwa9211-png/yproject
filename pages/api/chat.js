@@ -1,4 +1,4 @@
-// pages/api/chat.js  2025-11-28  最终版：Kimi主脑+智谱搜索+读取最近10条对话
+// pages/api/chat.js  2025-11-28  最终版：Kimi主脑+智谱搜索+读取最近10条对话+前端不闪现
 import { connectToMongo } from '../../lib/mongodb';
 import { performWebSearch, fetchSZZS, fetchSZZSHistory } from '../../lib/ai';
 import { kimiChat } from '../../lib/kimi';
