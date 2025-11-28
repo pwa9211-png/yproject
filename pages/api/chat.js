@@ -1,4 +1,4 @@
-// pages/api/chat.js  2025-11-28  最终版：Kimi主脑+智谱搜索工具（关键词含“今天/现在/最新”）
+// pages/api/chat.js  2025-11-28  最终版：Kimi主脑+智谱搜索+读取最近10条对话
 import { connectToMongo } from '../../lib/mongodb';
 import { performWebSearch, fetchSZZS, fetchSZZSHistory } from '../../lib/ai';
 import { kimiChat } from '../../lib/kimi';
@@ -32,7 +32,9 @@ function formatTime() {
   const hh = String(cn.getUTCHours()).padStart(2, '0');
   const mi = String(cn.getUTCMinutes()).padStart(2, '0');
   const ss = String(cn.getUTCSeconds()).padStart(2, '0');
-  return `北京时间 ${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+  const str = `北京时间 ${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+  lastTime = { ts: cn, str }; // 记录
+  return str;
 }
 
 /** 计算与上一次时间的流逝时长 */
@@ -68,6 +70,20 @@ export default async function handler(req, res) {
     }
 
     let aiReply;
+
+    // 统一读取最近 10 条对话（含上下文）
+    const historyMsgs = await ChatMessage
+      .find({ room })
+      .sort({ timestamp: -1 })
+      .limit(10)
+      .toArray();
+    const msgs = historyMsgs
+      .reverse()
+      .map(m => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.message }));
+
+    // 插入当前用户消息
+    msgs.push({ role: 'user', content: message });
+
     if (isTimeQuery(message)) {
       // ① 系统时间直接返回
       console.log('【系统时间】');
@@ -103,16 +119,16 @@ export default async function handler(req, res) {
         ? `上证指数 ${data.price}（${data.change > 0 ? '+' : ''}${data.change} ${data.changePercent}%） 来源：${data.source}`
         : `行情接口暂时不可用`;
     } else if (needsSearch(message)) {
-      // ⑥ 需要联网 → 智谱搜索 + Kimi 总结
+      // ⑥ 需要联网 → 智谱搜索 + Kimi 总结（含历史上下文）
       console.log('【智谱搜索+Kimi总结】');
       const searchTxt = await performWebSearch(message.replace(`@${AI_SENDER_NAME}`, '').trim());
-      const prompt    = `请基于以下实时信息回答，不要额外解释：\n${searchTxt}`;
-      const kimians   = await kimiChat([{ role: 'user', content: prompt }]);
-      aiReply         = kimians.content;
+      msgs.push({ role: 'user', content: `请基于以下实时信息回答，不要额外解释：\n${searchTxt}` });
+      const kimians = await kimiChat(msgs);
+      aiReply = kimians.content;
     } else {
-      // ⑦ 普通对话 → Kimi 主脑
+      // ⑦ 普通对话 → Kimi 主脑（含历史上下文）
       console.log('【Kimi主脑】');
-      const kimians = await kimiChat([{ role: 'user', content: message }]);
+      const kimians = await kimiChat(msgs);
       aiReply = kimians.content;
     }
 
